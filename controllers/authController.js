@@ -3,7 +3,6 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Register new user
 exports.register = async (req, res) => {
   try {
     const { name, email, phone, password } = req.body;
@@ -23,7 +22,6 @@ exports.register = async (req, res) => {
   }
 };
 
-// Login existing user
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -49,7 +47,6 @@ exports.login = async (req, res) => {
   }
 };
 
-// Update logged-in user
 exports.updateProfile = async (req, res) => {
   try {
     const { name, phone } = req.body;
@@ -65,7 +62,6 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-// Delete logged-in user
 exports.deleteProfile = async (req, res) => {
   try {
     await User.findByIdAndDelete(req.userId);

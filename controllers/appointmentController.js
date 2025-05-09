@@ -1,17 +1,59 @@
 const Appointment = require("../models/Appointment");
+const Service = require("../models/Service");
 
-// Create a new appointment
 exports.createAppointment = async (req, res) => {
   try {
-    const appoint = await Appointment.create(req.body);
-    res.status(201).json(appoint);
+    const {
+      petName,
+      species,
+      breed,
+      notes,
+      size,
+      ownerName,
+      ownerPhone,
+      baseService,
+      extraServices = [],
+      date,
+      time,
+      status = "Pendente",
+    } = req.body;
+
+    const base = await Service.findById(baseService);
+    if (!base) {
+      return res.status(400).json({ message: "Serviço base não encontrado" });
+    }
+
+    const extras = await Service.find({ _id: { $in: extraServices } });
+
+    const total = extras.reduce((acc, e) => acc + e.price, base.price);
+
+    const appoint = await Appointment.create({
+      petName,
+      species,
+      breed,
+      notes,
+      size,
+      ownerName,
+      ownerPhone,
+      baseService,
+      extraServices,
+      date,
+      time,
+      status,
+      price: total,
+    });
+
+    const populated = await Appointment.findById(appoint._id)
+      .populate("baseService")
+      .populate("extraServices");
+
+    res.status(201).json(populated);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Erro ao criar agendamento" });
   }
 };
 
-// Get all appointments
 exports.getAllAppointments = async (_req, res) => {
   try {
     const list = await Appointment.find()
@@ -24,12 +66,10 @@ exports.getAllAppointments = async (_req, res) => {
   }
 };
 
-// Get one appointment by ID
 exports.getAppointmentById = async (req, res) => {
   res.json(req.appointment);
 };
 
-// Update an appointment
 exports.updateAppointment = async (req, res) => {
   try {
     Object.assign(req.appointment, req.body);
@@ -41,7 +81,6 @@ exports.updateAppointment = async (req, res) => {
   }
 };
 
-// Delete an appointment
 exports.deleteAppointment = async (req, res) => {
   try {
     await req.appointment.deleteOne();

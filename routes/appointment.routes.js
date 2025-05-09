@@ -10,7 +10,6 @@ const {
   deleteAppointment
 } = require('../controllers/appointmentController');
 
-// All routes protected
 router.use(authMiddleware);
 
 router.post('/', createAppointment);

@@ -6,6 +6,7 @@ const appointmentSchema = new mongoose.Schema(
     species: { type: String, required: true, enum: ["Cachorro", "Gato"] },
     breed: { type: String, trim: true },
     notes: { type: String, trim: true },
+    price: { type: Number },
     size: {
       type: String,
       required: true,

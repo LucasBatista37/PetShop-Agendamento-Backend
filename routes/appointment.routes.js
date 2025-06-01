@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middlewares/authMiddleware');
 const appointmentMiddleware = require('../middlewares/appointmentMiddleware');
+const validateAppointment = require('../middlewares/validateAppointment');
 const {
   createAppointment,
   getAllAppointments,
@@ -12,7 +13,7 @@ const {
 
 router.use(authMiddleware);
 
-router.post('/', createAppointment);
+router.post('/', validateAppointment, createAppointment);
 router.get('/', getAllAppointments);
 router.get('/:id', appointmentMiddleware, getAppointmentById);
 router.put('/:id', appointmentMiddleware, updateAppointment);

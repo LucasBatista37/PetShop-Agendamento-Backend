@@ -3,9 +3,7 @@ const Appointment = require("../models/Appointment");
 module.exports = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const appointment = await Appointment.findById(id)
-      .populate("baseService")
-      .populate("extraServices");
+    const appointment = await Appointment.findById(id); 
     if (!appointment) {
       return res.status(404).json({ message: "Agendamento não encontrado" });
     }

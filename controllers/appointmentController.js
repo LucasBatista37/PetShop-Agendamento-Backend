@@ -73,13 +73,30 @@ exports.getAppointmentById = async (req, res) => {
 exports.updateAppointment = async (req, res) => {
   try {
     Object.assign(req.appointment, req.body);
-    const updated = await req.appointment.save();
+
+    if (req.body.baseService || req.body.extraServices) {
+      const base = await Service.findById(req.appointment.baseService);
+      const extras = await Service.find({
+        _id: { $in: req.appointment.extraServices },
+      });
+
+      req.appointment.price =
+        base.price + extras.reduce((acc, e) => acc + e.price, 0);
+    }
+
+    await req.appointment.save();
+
+    const updated = await Appointment.findById(req.appointment._id)
+      .populate("baseService")
+      .populate("extraServices");
+
     res.json(updated);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Erro ao atualizar agendamento" });
   }
 };
+
 
 exports.deleteAppointment = async (req, res) => {
   try {

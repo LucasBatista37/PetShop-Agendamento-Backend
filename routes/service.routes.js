@@ -10,7 +10,7 @@ const {
   deleteService,
 } = require("../controllers/serviceController");
 
-router.post("/", authMiddleware, createService);
+router.post("/", authMiddleware,createService);
 router.get("/", authMiddleware, getAllServices);
 router.get("/:id", authMiddleware, serviceMiddleware, getServiceById);
 router.put("/:id", authMiddleware, serviceMiddleware, updateService);

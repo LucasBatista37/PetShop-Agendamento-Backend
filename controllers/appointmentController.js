@@ -41,6 +41,7 @@ exports.createAppointment = async (req, res) => {
       time,
       status,
       price: total,
+      user: req.userId,
     });
 
     const populated = await Appointment.findById(appoint._id)
@@ -56,7 +57,7 @@ exports.createAppointment = async (req, res) => {
 
 exports.getAllAppointments = async (_req, res) => {
   try {
-    const list = await Appointment.find()
+    const list = await Appointment.find({ user: _req.userId }) 
       .populate("baseService")
       .populate("extraServices");
     res.json(list);
@@ -96,7 +97,6 @@ exports.updateAppointment = async (req, res) => {
     res.status(500).json({ message: "Erro ao atualizar agendamento" });
   }
 };
-
 
 exports.deleteAppointment = async (req, res) => {
   try {

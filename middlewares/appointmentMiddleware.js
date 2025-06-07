@@ -3,10 +3,16 @@ const Appointment = require("../models/Appointment");
 module.exports = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const appointment = await Appointment.findById(id); 
+    const appointment = await Appointment.findById(id);
+
     if (!appointment) {
       return res.status(404).json({ message: "Agendamento não encontrado" });
     }
+
+    if (appointment.user.toString() !== req.userId) {
+      return res.status(403).json({ message: "Acesso não autorizado" });
+    }
+
     req.appointment = appointment;
     next();
   } catch (err) {

@@ -9,6 +9,7 @@ exports.createService = async (req, res) => {
       price,
       duration,
       extra,
+      user: req.userId,
     });
     res.status(201).json(service);
   } catch (err) {
@@ -17,9 +18,9 @@ exports.createService = async (req, res) => {
   }
 };
 
-exports.getAllServices = async (_req, res) => {
+exports.getAllServices = async (req, res) => {
   try {
-    const services = await Service.find();
+    const services = await Service.find({ user: req.userId });
     res.json(services);
   } catch (err) {
     console.error(err);
@@ -50,7 +51,7 @@ exports.updateService = async (req, res) => {
 
 exports.deleteService = async (req, res) => {
   try {
-    await req.service.deleteOne(); 
+    await req.service.deleteOne();
     res.json({ message: "Serviço excluído com sucesso" });
   } catch (err) {
     console.error(err);

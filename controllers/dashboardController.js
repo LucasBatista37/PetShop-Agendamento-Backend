@@ -31,6 +31,16 @@ exports.getStats = async (req, res) => {
       };
     });
 
+    const statusMap = {};
+    all.forEach((a) => {
+      const status = a.status || "Desconhecido";
+      statusMap[status] = (statusMap[status] || 0) + 1;
+    });
+    const statusCounts = Object.entries(statusMap).map(([status, count]) => ({
+      status,
+      count,
+    }));
+
     const byHourMap = {};
     all.forEach((a) => {
       const hour = a.time?.slice(0, 5) || "Desconhecido";
@@ -60,11 +70,12 @@ exports.getStats = async (req, res) => {
     });
 
     res.json({
-      todayAppointments,
+      allAppointments: all,
       weekly,
       byHour,
       services,
       last7Days,
+      statusCounts,
     });
   } catch (err) {
     console.error(err);

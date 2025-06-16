@@ -200,3 +200,97 @@ exports.deleteProfile = async (req, res) => {
     res.status(500).json({ message: "Erro ao excluir usuário" });
   }
 };
+
+exports.changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: "É preciso informar senha atual e nova senha." });
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Senha atual incorreta." });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+
+    res.json({ message: "Senha alterada com sucesso." });
+  } catch (err) {
+    console.error("Erro em changePassword:", err);
+    res.status(500).json({ message: "Erro ao alterar senha." });
+  }
+};
+
+exports.forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: "Email é obrigatório." });
+
+  const user = await User.findOne({ email });
+  if (!user)
+    return res.status(404).json({ message: "Usuário não encontrado." });
+
+  const token = crypto.randomBytes(20).toString("hex");
+  user.resetPasswordToken = token;
+  user.resetPasswordExpires = Date.now() + 3600000;
+  await user.save();
+
+  const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${token}&email=${email}`;
+
+  await transporter.sendMail({
+    from: `"PetCare" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: "Redefinição de senha PetCare",
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+        <h2 style="color:#4f46e5;">Olá, ${user.name}!</h2>
+        <p>Recebemos um pedido para redefinir sua senha.</p>
+        <p>Clique no link abaixo para criar uma nova senha (válido por 1 hora):</p>
+        <p><a href="${resetUrl}" style="background:#4f46e5;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Redefinir Senha</a></p>
+        <p>Ou copie e cole este link no navegador:</p>
+        <p style="word-break:break-all;">${resetUrl}</p>
+        <hr style="margin:24px 0;"/>
+        <p style="font-size:12px;color:#888;">Se você não solicitou, ignore este e-mail.</p>
+      </div>
+    `,
+  });
+
+  res.json({
+    message: "Link de redefinição de senha enviado para seu e-mail.",
+  });
+};
+
+exports.resetPassword = async (req, res) => {
+  const { email, token, newPassword } = req.body;
+  if (!email || !token || !newPassword) {
+    return res
+      .status(400)
+      .json({ message: "Email, token e nova senha são obrigatórios." });
+  }
+
+  const user = await User.findOne({
+    email,
+    resetPasswordToken: token,
+    resetPasswordExpires: { $gt: Date.now() },
+  });
+  if (!user) {
+    return res.status(400).json({ message: "Token inválido ou expirado." });
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  user.password = await bcrypt.hash(newPassword, salt);
+  user.resetPasswordToken = undefined;
+  user.resetPasswordExpires = undefined;
+  await user.save();
+
+  res.json({ message: "Senha redefinida com sucesso." });
+};

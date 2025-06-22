@@ -4,7 +4,6 @@ const {
   isSameDay,
   addDays,
   format,
-  parseISO,
 } = require("date-fns");
 
 exports.getStats = async (req, res) => {
@@ -15,10 +14,6 @@ exports.getStats = async (req, res) => {
     );
 
     const today = startOfDay(new Date());
-
-    const todayAppointments = all.filter((a) =>
-      isSameDay(new Date(a.date), today)
-    );
 
     const weekly = Array.from({ length: 7 }).map((_, i) => {
       const target = addDays(today, i);

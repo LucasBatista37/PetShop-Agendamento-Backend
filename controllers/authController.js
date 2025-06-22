@@ -3,7 +3,16 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const crypto = require("crypto");
 const transporter = require("../utils/mailer");
+
 const JWT_SECRET = process.env.JWT_SECRET;
+const EMAIL_USER = process.env.EMAIL_USER;
+const BASE_URL = process.env.BASE_URL;
+const CLIENT_URL = process.env.CLIENT_URL;
+
+if (!JWT_SECRET) throw new Error("Variável JWT_SECRET não definida");
+if (!EMAIL_USER) throw new Error("Variável EMAIL_USER não definida");
+if (!BASE_URL) throw new Error("Variável BASE_URL não definida");
+if (!CLIENT_URL) throw new Error("Variável CLIENT_URL não definida");
 
 exports.register = async (req, res) => {
   try {
@@ -12,9 +21,7 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "E-mail já cadastrado" });
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashed = await bcrypt.hash(password, salt);
-
+    const hashed = await bcrypt.hash(password, 10);
     const emailToken = crypto.randomBytes(32).toString("hex");
 
     const user = await User.create({
@@ -25,30 +32,30 @@ exports.register = async (req, res) => {
       emailToken,
     });
 
-    const verifyUrl = `${process.env.BASE_URL}/api/auth/verify-email?token=${emailToken}&email=${email}`;
+    const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${emailToken}&email=${email}`;
 
     await transporter.sendMail({
-      from: `"PetCare" <${process.env.EMAIL_USER}>`,
+      from: `"PetCare" <${EMAIL_USER}>`,
       to: email,
       subject: "Confirme seu e-mail no PetCare",
       html: `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-      <h2 style="color: #4f46e5;">Olá, ${name}!</h2>
-      <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
-      <p>Para ativar sua conta, clique no botão abaixo:</p>
-      <p style="text-align: center;">
-        <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-          Confirmar E-mail
-        </a>
-      </p>
-      <p>Ou copie e cole este link no seu navegador:</p>
-      <p style="word-break: break-all;">${verifyUrl}</p>
-      <hr style="margin: 24px 0;" />
-      <p style="font-size: 12px; color: #888;">
-        Se você não se registrou no PetCare, pode ignorar este e-mail.
-      </p>
-    </div>
-  `,
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <h2 style="color: #4f46e5;">Olá, ${name}!</h2>
+          <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
+          <p>Para ativar sua conta, clique no botão abaixo:</p>
+          <p style="text-align: center;">
+            <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              Confirmar E-mail
+            </a>
+          </p>
+          <p>Ou copie e cole este link no seu navegador:</p>
+          <p style="word-break: break-all;">${verifyUrl}</p>
+          <hr style="margin: 24px 0;" />
+          <p style="font-size: 12px; color: #888;">
+            Se você não se registrou no PetCare, pode ignorar este e-mail.
+          </p>
+        </div>
+      `,
     });
 
     res.status(201).json({
@@ -74,7 +81,7 @@ exports.verifyEmail = async (req, res) => {
     user.isVerified = true;
     await user.save();
 
-    res.redirect(`${process.env.CLIENT_URL}/email-verificado`);
+    res.redirect(`${CLIENT_URL}/email-verificado`);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Erro ao verificar e-mail" });
@@ -97,30 +104,30 @@ exports.resendVerificationEmail = async (req, res) => {
     user.emailToken = crypto.randomBytes(32).toString("hex");
     await user.save();
 
-    const verifyUrl = `${process.env.BASE_URL}/api/auth/verify-email?token=${user.emailToken}&email=${user.email}`;
+    const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${user.emailToken}&email=${user.email}`;
 
     await transporter.sendMail({
-      from: `"PetCare" <${process.env.EMAIL_USER}>`,
+      from: `"PetCare" <${EMAIL_USER}>`,
       to: email,
       subject: "Reenvio: Confirme seu e-mail no PetCare",
       html: `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-      <h2 style="color: #4f46e5;">Olá, ${name}!</h2>
-      <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
-      <p>Para ativar sua conta, clique no botão abaixo:</p>
-      <p style="text-align: center;">
-        <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-          Confirmar E-mail
-        </a>
-      </p>
-      <p>Ou copie e cole este link no seu navegador:</p>
-      <p style="word-break: break-all;">${verifyUrl}</p>
-      <hr style="margin: 24px 0;" />
-      <p style="font-size: 12px; color: #888;">
-        Se você não se registrou no PetCare, pode ignorar este e-mail.
-      </p>
-    </div>
-  `,
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <h2 style="color: #4f46e5;">Olá, ${user.name}!</h2>
+          <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
+          <p>Para ativar sua conta, clique no botão abaixo:</p>
+          <p style="text-align: center;">
+            <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
+              Confirmar E-mail
+            </a>
+          </p>
+          <p>Ou copie e cole este link no seu navegador:</p>
+          <p style="word-break: break-all;">${verifyUrl}</p>
+          <hr style="margin: 24px 0;" />
+          <p style="font-size: 12px; color: #888;">
+            Se você não se registrou no PetCare, pode ignorar este e-mail.
+          </p>
+        </div>
+      `,
     });
 
     res.json({ message: "E-mail de confirmação reenviado com sucesso." });
@@ -135,13 +142,12 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(400).json({ message: "Credenciais inválidas" });
-    }
+    const validCredentials =
+      user && (await bcrypt.compare(password, user.password));
 
-    if (!user.isVerified) {
-      return res.status(403).json({
-        message: "E-mail não verificado. Verifique sua caixa de entrada.",
+    if (!validCredentials || !user.isVerified) {
+      return res.status(400).json({
+        message: "Credenciais inválidas ou e-mail não verificado.",
       });
     }
 

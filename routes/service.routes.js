@@ -10,10 +10,32 @@ const {
   deleteService,
 } = require("../controllers/serviceController");
 
-router.post("/", authMiddleware,createService);
+const {
+  serviceValidationRules,
+  validateService,
+} = require("../validators/serviceValidator");
+
+router.post(
+  "/",
+  authMiddleware,
+  serviceValidationRules,
+  validateService,
+  createService
+);
+
 router.get("/", authMiddleware, getAllServices);
+
 router.get("/:id", authMiddleware, serviceMiddleware, getServiceById);
-router.put("/:id", authMiddleware, serviceMiddleware, updateService);
+
+router.put(
+  "/:id",
+  authMiddleware,
+  serviceMiddleware,
+  serviceValidationRules, 
+  validateService, 
+  updateService
+);
+
 router.delete("/:id", authMiddleware, serviceMiddleware, deleteService);
 
 module.exports = router;

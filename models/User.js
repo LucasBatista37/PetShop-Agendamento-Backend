@@ -11,7 +11,12 @@ const userSchema = new mongoose.Schema(
     },
     phone: { type: String },
     password: { type: String, required: true },
+    isVerified: { type: Boolean, default: false },
+    emailToken: { type: String },
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Date },
   },
   { timestamps: true }
 );
+
 module.exports = mongoose.model("User", userSchema);

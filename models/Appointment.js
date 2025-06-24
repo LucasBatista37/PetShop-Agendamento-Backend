@@ -21,12 +21,13 @@ const appointmentSchema = new mongoose.Schema(
     },
     extraServices: [{ type: mongoose.Schema.Types.ObjectId, ref: "Service" }],
     date: { type: Date, required: true },
-    time: { type: String, required: true }, 
+    time: { type: String, required: true },
     status: {
       type: String,
       enum: ["Pendente", "Confirmado", "Cancelado", "Finalizado"],
       default: "Pendente",
     },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },
   {
     timestamps: true,

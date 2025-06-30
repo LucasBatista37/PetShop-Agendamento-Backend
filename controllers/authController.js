@@ -172,9 +172,10 @@ exports.login = async (req, res) => {
 
 exports.getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("-password");
-    if (!user)
+    const user = await User.findById(req.user._id).select("-password");
+    if (!user) {
       return res.status(404).json({ message: "Usuário não encontrado" });
+    }
     res.json({ user });
   } catch (err) {
     console.error(err);
@@ -185,11 +186,13 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const { name, phone } = req.body;
+
     const user = await User.findByIdAndUpdate(
-      req.userId,
+      req.user._id,
       { name, phone },
       { new: true, runValidators: true }
     ).select("-password");
+
     res.json({ user });
   } catch (err) {
     console.error(err);
@@ -199,7 +202,7 @@ exports.updateProfile = async (req, res) => {
 
 exports.deleteProfile = async (req, res) => {
   try {
-    await User.findByIdAndDelete(req.userId);
+    await User.findByIdAndDelete(req.user._id);
     res.json({ message: "Usuário excluído com sucesso" });
   } catch (err) {
     console.error(err);
@@ -216,7 +219,8 @@ exports.changePassword = async (req, res) => {
         .json({ message: "É preciso informar senha atual e nova senha." });
     }
 
-    const user = await User.findById(req.userId);
+    const user = await User.findById(req.user._id);
+
     if (!user) {
       return res.status(404).json({ message: "Usuário não encontrado." });
     }

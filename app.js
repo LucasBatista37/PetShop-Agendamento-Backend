@@ -9,6 +9,7 @@ const indexRoutes = require("./routes/index.routes");
 const appointmentRoutes = require("./routes/appointment.routes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const supportRoutes = require("./routes/support.routes.js");
+const collaboratorRoutes = require("./routes/collaborator.js");
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use("/api", indexRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/support", supportRoutes);
+app.use("/api/collaborators", collaboratorRoutes);
 
 app.get("/", (req, res) => {
   res.send("🚀 API do PetShop SaaS está no ar!");

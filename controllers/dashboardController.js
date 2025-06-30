@@ -1,15 +1,12 @@
 const Appointment = require("../models/Appointment");
-const {
-  startOfDay,
-  isSameDay,
-  addDays,
-  format,
-} = require("date-fns");
+const { startOfDay, isSameDay, addDays, format } = require("date-fns");
+const getOwnerId = require("../utils/getOwnerId");
 
 exports.getStats = async (req, res) => {
   try {
-    const userId = req.userId;
-    const all = await Appointment.find({ user: userId }).populate(
+    const ownerId = getOwnerId(req.user); 
+
+    const all = await Appointment.find({ user: ownerId }).populate(
       "baseService"
     );
 

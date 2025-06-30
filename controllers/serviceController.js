@@ -1,16 +1,21 @@
 const Service = require("../models/Service");
+const getOwnerId = require("../utils/getOwnerId");
 
 exports.createService = async (req, res) => {
   try {
+    const ownerId = getOwnerId(req.user);
+
     const { name, description, price, duration, extra } = req.body;
+
     const service = await Service.create({
       name,
       description,
       price,
       duration,
       extra,
-      user: req.userId,
+      user: ownerId,
     });
+
     res.status(201).json(service);
   } catch (err) {
     console.error(err);
@@ -20,7 +25,10 @@ exports.createService = async (req, res) => {
 
 exports.getAllServices = async (req, res) => {
   try {
-    const services = await Service.find({ user: req.userId });
+    const ownerId = getOwnerId(req.user);
+
+    const services = await Service.find({ user: ownerId });
+
     res.json(services);
   } catch (err) {
     console.error(err);
@@ -30,6 +38,12 @@ exports.getAllServices = async (req, res) => {
 
 exports.getServiceById = async (req, res) => {
   try {
+    const ownerId = getOwnerId(req.user);
+
+    if (req.service.user.toString() !== ownerId.toString()) {
+      return res.status(403).json({ message: "Acesso negado ao serviço" });
+    }
+
     res.json(req.service);
   } catch (err) {
     console.error(err);
@@ -39,9 +53,24 @@ exports.getServiceById = async (req, res) => {
 
 exports.updateService = async (req, res) => {
   try {
+    const ownerId = getOwnerId(req.user);
+
+    if (req.service.user.toString() !== ownerId.toString()) {
+      return res.status(403).json({ message: "Acesso negado ao serviço" });
+    }
+
     const { name, description, price, duration, extra } = req.body;
-    Object.assign(req.service, { name, description, price, duration, extra });
+
+    Object.assign(req.service, {
+      name,
+      description,
+      price,
+      duration,
+      extra,
+    });
+
     const updated = await req.service.save();
+
     res.json(updated);
   } catch (err) {
     console.error(err);
@@ -51,7 +80,14 @@ exports.updateService = async (req, res) => {
 
 exports.deleteService = async (req, res) => {
   try {
+    const ownerId = getOwnerId(req.user);
+
+    if (req.service.user.toString() !== ownerId.toString()) {
+      return res.status(403).json({ message: "Acesso negado ao serviço" });
+    }
+
     await req.service.deleteOne();
+
     res.json({ message: "Serviço excluído com sucesso" });
   } catch (err) {
     console.error(err);

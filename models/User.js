@@ -1,7 +1,8 @@
 const mongoose = require("mongoose");
+
 const userSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
+    name: { type: String, trim: true }, 
     email: {
       type: String,
       required: true,
@@ -10,11 +11,22 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
     phone: { type: String },
-    password: { type: String, required: true },
+    password: { type: String }, 
     isVerified: { type: Boolean, default: false },
     emailToken: { type: String },
     resetPasswordToken: { type: String },
     resetPasswordExpires: { type: Date },
+
+    role: {
+      type: String,
+      enum: ["admin", "collaborator"],
+      default: "admin",
+    },
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User", 
+    },
+    invitedBy: { type: String }, 
   },
   { timestamps: true }
 );

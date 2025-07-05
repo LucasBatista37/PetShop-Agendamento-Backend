@@ -140,15 +140,19 @@ exports.resendVerificationEmail = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     const user = await User.findOne({ email });
 
-    const validCredentials =
-      user && (await bcrypt.compare(password, user.password));
+    if (!user || !user.password) {
+      return res.status(400).json({ message: "Credenciais inválidas." });
+    }
+
+    const validCredentials = await bcrypt.compare(password, user.password);
 
     if (!validCredentials || !user.isVerified) {
-      return res.status(400).json({
-        message: "Credenciais inválidas ou e-mail não verificado.",
-      });
+      return res
+        .status(400)
+        .json({ message: "Credenciais inválidas ou e-mail não verificado." });
     }
 
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, {

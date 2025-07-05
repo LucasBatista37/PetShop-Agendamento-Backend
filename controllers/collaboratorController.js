@@ -5,10 +5,11 @@ const User = require("../models/User");
 
 exports.inviteCollaborator = async (req, res) => {
   try {
-    const { email } = req.body;
+    const { email, department } = req.body;
     const adminId = req.user._id;
 
     const token = crypto.randomBytes(32).toString("hex");
+    const expirationDate = Date.now() + 7 * 24 * 60 * 60 * 1000;
 
     const existingUser = await User.findOne({ email });
 
@@ -27,8 +28,11 @@ exports.inviteCollaborator = async (req, res) => {
 
     await User.create({
       email,
+      department,
       role: "collaborator",
       emailToken: token,
+      inviteExpires: expirationDate,
+      pendingInvitation: true,
       owner: adminId,
     });
 
@@ -55,20 +59,39 @@ exports.acceptInvite = async (req, res) => {
   try {
     const { token, email, name, password } = req.body;
 
-    const user = await User.findOne({ email, emailToken: token });
-    if (!user)
+    console.log("Recebido no aceite:", req.body);
+
+    if (!email || !token || !name || !password) {
+      return res
+        .status(400)
+        .json({ message: "Todos os campos são obrigatórios." });
+    }
+
+    const user = await User.findOne({
+      email,
+      emailToken: token,
+      inviteExpires: { $gt: Date.now() },
+      pendingInvitation: true,
+    });
+
+    if (!user) {
       return res.status(400).json({ message: "Convite inválido ou expirado." });
+    }
 
     user.name = name;
     user.password = await bcrypt.hash(password, 10);
     user.emailToken = undefined;
     user.isVerified = true;
+    user.pendingInvitation = false;
+    user.inviteAcceptedAt = new Date();
 
     await user.save();
 
-    res.json({ message: "Convite aceito com sucesso." });
+    res.json({
+      message: "Convite aceito com sucesso. Agora você pode fazer login.",
+    });
   } catch (err) {
-    console.error(err);
+    console.error("Erro ao aceitar convite:", err);
     res.status(500).json({ message: "Erro ao aceitar convite." });
   }
 };
@@ -84,7 +107,20 @@ exports.getAllCollaborators = async (req, res) => {
       "-password -emailToken -resetPasswordToken -resetPasswordExpires"
     );
 
-    res.json({ collaborators });
+    const enriched = collaborators.map((c) => {
+      const status = c.pendingInvitation
+        ? "Pendente"
+        : c.inviteAcceptedAt
+        ? "Ativo"
+        : "Indefinido";
+
+      return {
+        ...c.toObject(),
+        status,
+      };
+    });
+
+    res.json({ collaborators: enriched });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Erro ao listar colaboradores" });

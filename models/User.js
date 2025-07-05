@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema(
   {
-    name: { type: String, trim: true }, 
+    name: { type: String, trim: true },
     email: {
       type: String,
       required: true,
@@ -11,12 +11,11 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
     phone: { type: String },
-    password: { type: String }, 
+    password: { type: String },
     isVerified: { type: Boolean, default: false },
     emailToken: { type: String },
     resetPasswordToken: { type: String },
     resetPasswordExpires: { type: Date },
-
     role: {
       type: String,
       enum: ["admin", "collaborator"],
@@ -24,9 +23,13 @@ const userSchema = new mongoose.Schema(
     },
     owner: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User", 
+      ref: "User",
     },
-    invitedBy: { type: String }, 
+    invitedBy: { type: String },
+    pendingInvitation: { type: Boolean, default: false },
+    inviteExpires: { type: Date },
+    inviteAcceptedAt: { type: Date },
+    department: { type: String, trim: true },
   },
   { timestamps: true }
 );

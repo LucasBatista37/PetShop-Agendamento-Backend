@@ -13,7 +13,7 @@ const appointmentSchema = new mongoose.Schema(
       enum: ["Pequeno", "Medio", "Grande"],
     },
     ownerName: { type: String, required: true, trim: true },
-    ownerPhone: { type: String, required: true, trim: true },
+    ownerPhone: { type: String, trim: true },
     baseService: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Service",

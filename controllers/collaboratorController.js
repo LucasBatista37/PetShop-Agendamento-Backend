@@ -8,23 +8,22 @@ exports.inviteCollaborator = async (req, res) => {
     const { email, department } = req.body;
     const adminId = req.user._id;
 
-    const token = crypto.randomBytes(32).toString("hex");
-    const expirationDate = Date.now() + 7 * 24 * 60 * 60 * 1000;
-
     const existingUser = await User.findOne({ email });
 
-    if (existingUser && existingUser.role === "collaborator") {
-      return res.status(400).json({
-        message: "Esse usuário já é colaborador.",
-      });
-    }
-
-    if (existingUser && existingUser.role !== "collaborator") {
+    if (existingUser) {
+      if (existingUser.role === "collaborator") {
+        return res.status(400).json({
+          message: "Esse usuário já é colaborador.",
+        });
+      }
       return res.status(400).json({
         message:
           "Este e-mail já está em uso por um usuário ativo. O usuário precisa excluir sua conta antes de poder ser adicionado como colaborador.",
       });
     }
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expirationDate = Date.now() + 7 * 24 * 60 * 60 * 1000;
 
     await User.create({
       email,
@@ -43,9 +42,23 @@ exports.inviteCollaborator = async (req, res) => {
       to: email,
       subject: "Convite para colaborar no PetCare",
       html: `
-        <p>Você foi convidado a colaborar no sistema PetCare.</p>
-        <p><a href="${inviteUrl}">Clique aqui para aceitar o convite</a></p>
-      `,
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+      <h2 style="color: #4f46e5;">Olá!</h2>
+      <p>Você foi convidado para colaborar no sistema <strong>PetCare</strong>.</p>
+      <p>Para aceitar o convite, clique no botão abaixo:</p>
+      <p style="text-align: center;">
+        <a href="${inviteUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
+          Aceitar Convite
+        </a>
+      </p>
+      <p>Ou copie e cole este link no seu navegador:</p>
+      <p style="word-break: break-all;">${inviteUrl}</p>
+      <hr style="margin: 24px 0;" />
+      <p style="font-size: 12px; color: #888;">
+        Se você não esperava esse convite, pode ignorar este e-mail.
+      </p>
+    </div>
+  `,
     });
 
     res.json({ message: "Convite enviado com sucesso para novo colaborador." });
@@ -59,9 +72,7 @@ exports.acceptInvite = async (req, res) => {
   try {
     const { token, email, name, password } = req.body;
 
-    console.log("Recebido no aceite:", req.body);
-
-    if (!email || !token || !name || !password) {
+    if (![email, token, name, password].every(Boolean)) {
       return res
         .status(400)
         .json({ message: "Todos os campos são obrigatórios." });

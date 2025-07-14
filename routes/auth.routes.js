@@ -12,12 +12,16 @@ const {
   changePassword,
   forgotPassword,
   resetPassword,
+  refreshToken,
+  logout,
 } = require("../controllers/authController");
 
 router.post("/register", register);
 router.get("/verify-email", verifyEmail);
 router.post("/resend-verification", resendVerificationEmail);
 router.post("/login", login);
+router.post("/refresh", refreshToken); 
+router.post("/logout", logout);
 router.put("/me", authMiddleware, updateProfile);
 router.delete("/me", authMiddleware, deleteProfile);
 router.get("/me", authMiddleware, getProfile);

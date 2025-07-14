@@ -39,23 +39,23 @@ exports.register = async (req, res) => {
       to: email,
       subject: "Confirme seu e-mail no PetCare",
       html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-          <h2 style="color: #4f46e5;">Olá, ${name}!</h2>
-          <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
-          <p>Para ativar sua conta, clique no botão abaixo:</p>
-          <p style="text-align: center;">
-            <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-              Confirmar E-mail
-            </a>
-          </p>
-          <p>Ou copie e cole este link no seu navegador:</p>
-          <p style="word-break: break-all;">${verifyUrl}</p>
-          <hr style="margin: 24px 0;" />
-          <p style="font-size: 12px; color: #888;">
-            Se você não se registrou no PetCare, pode ignorar este e-mail.
-          </p>
-        </div>
-      `,
+          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <h2 style="color: #4f46e5;">Olá, ${name}!</h2>
+            <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
+            <p>Para ativar sua conta, clique no botão abaixo:</p>
+            <p style="text-align: center;">
+              <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                Confirmar E-mail
+              </a>
+            </p>
+            <p>Ou copie e cole este link no seu navegador:</p>
+            <p style="word-break: break-all;">${verifyUrl}</p>
+            <hr style="margin: 24px 0;" />
+            <p style="font-size: 12px; color: #888;">
+              Se você não se registrou no PetCare, pode ignorar este e-mail.
+            </p>
+          </div>
+        `,
     });
 
     res.status(201).json({
@@ -111,23 +111,23 @@ exports.resendVerificationEmail = async (req, res) => {
       to: email,
       subject: "Reenvio: Confirme seu e-mail no PetCare",
       html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-          <h2 style="color: #4f46e5;">Olá, ${user.name}!</h2>
-          <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
-          <p>Para ativar sua conta, clique no botão abaixo:</p>
-          <p style="text-align: center;">
-            <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-              Confirmar E-mail
-            </a>
-          </p>
-          <p>Ou copie e cole este link no seu navegador:</p>
-          <p style="word-break: break-all;">${verifyUrl}</p>
-          <hr style="margin: 24px 0;" />
-          <p style="font-size: 12px; color: #888;">
-            Se você não se registrou no PetCare, pode ignorar este e-mail.
-          </p>
-        </div>
-      `,
+          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <h2 style="color: #4f46e5;">Olá, ${user.name}!</h2>
+            <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
+            <p>Para ativar sua conta, clique no botão abaixo:</p>
+            <p style="text-align: center;">
+              <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
+                Confirmar E-mail
+              </a>
+            </p>
+            <p>Ou copie e cole este link no seu navegador:</p>
+            <p style="word-break: break-all;">${verifyUrl}</p>
+            <hr style="margin: 24px 0;" />
+            <p style="font-size: 12px; color: #888;">
+              Se você não se registrou no PetCare, pode ignorar este e-mail.
+            </p>
+          </div>
+        `,
     });
 
     res.json({ message: "E-mail de confirmação reenviado com sucesso." });
@@ -155,19 +155,37 @@ exports.login = async (req, res) => {
         .json({ message: "Credenciais inválidas ou e-mail não verificado." });
     }
 
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
-      expiresIn: "7d",
+    const accessToken = jwt.sign({ userId: user._id }, JWT_SECRET, {
+      expiresIn: "15m",
     });
 
-    res.json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-      },
-    });
+    const refreshToken = jwt.sign(
+      { userId: user._id },
+      process.env.REFRESH_SECRET,
+      {
+        expiresIn: "30d",
+      }
+    );
+
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    res
+      .cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Strict",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      })
+      .json({
+        accessToken,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+        },
+      });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Erro no servidor" });
@@ -265,17 +283,17 @@ exports.forgotPassword = async (req, res) => {
     to: email,
     subject: "Redefinição de senha PetCare",
     html: `
-      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
-        <h2 style="color:#4f46e5;">Olá, ${user.name}!</h2>
-        <p>Recebemos um pedido para redefinir sua senha.</p>
-        <p>Clique no link abaixo para criar uma nova senha (válido por 1 hora):</p>
-        <p><a href="${resetUrl}" style="background:#4f46e5;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Redefinir Senha</a></p>
-        <p>Ou copie e cole este link no navegador:</p>
-        <p style="word-break:break-all;">${resetUrl}</p>
-        <hr style="margin:24px 0;"/>
-        <p style="font-size:12px;color:#888;">Se você não solicitou, ignore este e-mail.</p>
-      </div>
-    `,
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
+          <h2 style="color:#4f46e5;">Olá, ${user.name}!</h2>
+          <p>Recebemos um pedido para redefinir sua senha.</p>
+          <p>Clique no link abaixo para criar uma nova senha (válido por 1 hora):</p>
+          <p><a href="${resetUrl}" style="background:#4f46e5;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Redefinir Senha</a></p>
+          <p>Ou copie e cole este link no navegador:</p>
+          <p style="word-break:break-all;">${resetUrl}</p>
+          <hr style="margin:24px 0;"/>
+          <p style="font-size:12px;color:#888;">Se você não solicitou, ignore este e-mail.</p>
+        </div>
+      `,
   });
 
   res.json({
@@ -307,4 +325,49 @@ exports.resetPassword = async (req, res) => {
   await user.save();
 
   res.json({ message: "Senha redefinida com sucesso." });
+};
+
+exports.refreshToken = async (req, res) => {
+  const token = req.cookies.refreshToken;
+  if (!token) return res.sendStatus(401);
+
+  try {
+    const decoded = jwt.verify(token, process.env.REFRESH_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user || user.refreshToken !== token) return res.sendStatus(403);
+
+    const newAccessToken = jwt.sign({ userId: user._id }, JWT_SECRET, {
+      expiresIn: "15m",
+    });
+
+    res.json({ accessToken: newAccessToken });
+  } catch (err) {
+    console.error("Erro ao renovar token:", err);
+    res.sendStatus(403);
+  }
+};
+
+exports.logout = async (req, res) => {
+  try {
+    const token = req.cookies.refreshToken;
+    if (token) {
+      const decoded = jwt.verify(token, process.env.REFRESH_SECRET);
+      const user = await User.findById(decoded.userId);
+      if (user) {
+        user.refreshToken = null;
+        await user.save();
+      }
+    }
+
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+    });
+
+    res.json({ message: "Logout realizado com sucesso." });
+  } catch (err) {
+    console.error("Erro no logout:", err);
+    res.status(500).json({ message: "Erro ao sair da conta" });
+  }
 };

@@ -25,6 +25,7 @@ const userSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+    refreshToken: { type: String },
     invitedBy: { type: String },
     pendingInvitation: { type: Boolean, default: false },
     inviteExpires: { type: Date },

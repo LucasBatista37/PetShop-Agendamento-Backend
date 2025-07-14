@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const cookieParser = require("cookie-parser"); 
 
 const Sentry = require("@sentry/node");
 
@@ -16,8 +17,15 @@ const app = express();
 app.use(Sentry.Handlers.requestHandler());
 app.use(Sentry.Handlers.tracingHandler());
 
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL, 
+    credentials: true, 
+  })
+);
+
 app.use(express.json());
+app.use(cookieParser()); 
 
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes);

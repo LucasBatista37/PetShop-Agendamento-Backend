@@ -1,7 +1,9 @@
-const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
-const transporter = require("../utils/mailer");
+const bcrypt = require("bcryptjs");
+const Invite = require("../models/Invite");
 const User = require("../models/User");
+const transporter = require("../utils/mailer");
+const { generateInviteCollaboratorEmail } = require("../utils/emailTemplates");
 
 exports.inviteCollaborator = async (req, res) => {
   try {
@@ -9,29 +11,22 @@ exports.inviteCollaborator = async (req, res) => {
     const adminId = req.user._id;
 
     const existingUser = await User.findOne({ email });
-
     if (existingUser) {
-      if (existingUser.role === "collaborator") {
-        return res.status(400).json({
-          message: "Esse usuário já é colaborador.",
-        });
-      }
       return res.status(400).json({
-        message:
-          "Este e-mail já está em uso por um usuário ativo. O usuário precisa excluir sua conta antes de poder ser adicionado como colaborador.",
+        message: "Este e-mail já está em uso por um usuário ativo.",
       });
     }
 
-    const token = crypto.randomBytes(32).toString("hex");
-    const expirationDate = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    await Invite.deleteMany({ email, accepted: false });
 
-    await User.create({
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; 
+
+    await Invite.create({
       email,
       department,
-      role: "collaborator",
-      emailToken: token,
-      inviteExpires: expirationDate,
-      pendingInvitation: true,
+      token,
+      expiresAt,
       owner: adminId,
     });
 
@@ -41,30 +36,13 @@ exports.inviteCollaborator = async (req, res) => {
       from: `"PetCare" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: "Convite para colaborar no PetCare",
-      html: `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-      <h2 style="color: #4f46e5;">Olá!</h2>
-      <p>Você foi convidado para colaborar no sistema <strong>PetCare</strong>.</p>
-      <p>Para aceitar o convite, clique no botão abaixo:</p>
-      <p style="text-align: center;">
-        <a href="${inviteUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-          Aceitar Convite
-        </a>
-      </p>
-      <p>Ou copie e cole este link no seu navegador:</p>
-      <p style="word-break: break-all;">${inviteUrl}</p>
-      <hr style="margin: 24px 0;" />
-      <p style="font-size: 12px; color: #888;">
-        Se você não esperava esse convite, pode ignorar este e-mail.
-      </p>
-    </div>
-  `,
+      html: generateInviteCollaboratorEmail(inviteUrl),
     });
 
-    res.json({ message: "Convite enviado com sucesso para novo colaborador." });
+    res.json({ message: "Convite enviado com sucesso." });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro ao enviar convite." });
+    console.error("Erro ao enviar convite:", err);
+    res.status(500).json({ message: "Erro interno ao enviar convite." });
   }
 };
 
@@ -72,35 +50,38 @@ exports.acceptInvite = async (req, res) => {
   try {
     const { token, email, name, password } = req.body;
 
-    if (![email, token, name, password].every(Boolean)) {
-      return res
-        .status(400)
-        .json({ message: "Todos os campos são obrigatórios." });
+    if (![token, email, name, password].every(Boolean)) {
+      return res.status(400).json({ message: "Todos os campos são obrigatórios." });
     }
 
-    const user = await User.findOne({
+    const invite = await Invite.findOne({
+      token,
       email,
-      emailToken: token,
-      inviteExpires: { $gt: Date.now() },
-      pendingInvitation: true,
+      expiresAt: { $gt: Date.now() },
+      accepted: false,
     });
 
-    if (!user) {
+    if (!invite) {
       return res.status(400).json({ message: "Convite inválido ou expirado." });
     }
 
-    user.name = name;
-    user.password = await bcrypt.hash(password, 10);
-    user.emailToken = undefined;
-    user.isVerified = true;
-    user.pendingInvitation = false;
-    user.inviteAcceptedAt = new Date();
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    await user.save();
-
-    res.json({
-      message: "Convite aceito com sucesso. Agora você pode fazer login.",
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      department: invite.department,
+      role: "collaborator",
+      isVerified: true,
+      owner: invite.owner,
     });
+
+    invite.accepted = true;
+    invite.acceptedAt = new Date();
+    await invite.save();
+
+    res.json({ message: "Conta criada com sucesso. Agora você pode fazer login." });
   } catch (err) {
     console.error("Erro ao aceitar convite:", err);
     res.status(500).json({ message: "Erro ao aceitar convite." });
@@ -109,53 +90,35 @@ exports.acceptInvite = async (req, res) => {
 
 exports.getAllCollaborators = async (req, res) => {
   try {
-    const adminId = req.user._id;
-
     const collaborators = await User.find({
       role: "collaborator",
-      owner: adminId,
-    }).select(
-      "-password -emailToken -resetPasswordToken -resetPasswordExpires"
-    );
+      owner: req.user._id,
+    }).select("-password");
 
-    const enriched = collaborators.map((c) => {
-      const status = c.pendingInvitation
-        ? "Pendente"
-        : c.inviteAcceptedAt
-        ? "Ativo"
-        : "Indefinido";
-
-      return {
-        ...c.toObject(),
-        status,
-      };
-    });
-
-    res.json({ collaborators: enriched });
+    res.json({ collaborators });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro ao listar colaboradores" });
+    console.error("Erro ao listar colaboradores:", err);
+    res.status(500).json({ message: "Erro ao listar colaboradores." });
   }
 };
 
 exports.deleteCollaborator = async (req, res) => {
   try {
-    const adminId = req.user._id;
     const { id } = req.params;
 
     const collaborator = await User.findOneAndDelete({
       _id: id,
-      owner: adminId,
       role: "collaborator",
+      owner: req.user._id,
     });
 
     if (!collaborator) {
-      return res.status(404).json({ message: "Colaborador não encontrado" });
+      return res.status(404).json({ message: "Colaborador não encontrado." });
     }
 
-    res.json({ message: "Colaborador excluído com sucesso" });
+    res.json({ message: "Colaborador excluído com sucesso." });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro ao excluir colaborador" });
+    console.error("Erro ao excluir colaborador:", err);
+    res.status(500).json({ message: "Erro ao excluir colaborador." });
   }
 };

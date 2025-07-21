@@ -3,6 +3,9 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const crypto = require("crypto");
 const transporter = require("../utils/mailer");
+const { validationResult } = require("express-validator");
+const { generateVerificationEmail } = require("../utils/emailTemplates");
+const { generateResetPasswordEmail } = require("../utils/emailTemplates");  
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const EMAIL_USER = process.env.EMAIL_USER;
@@ -15,6 +18,10 @@ if (!BASE_URL) throw new Error("Variável BASE_URL não definida");
 if (!CLIENT_URL) throw new Error("Variável CLIENT_URL não definida");
 
 exports.register = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
   try {
     const { name, email, phone, password } = req.body;
     if (await User.findOne({ email })) {
@@ -38,24 +45,7 @@ exports.register = async (req, res) => {
       from: `"PetCare" <${EMAIL_USER}>`,
       to: email,
       subject: "Confirme seu e-mail no PetCare",
-      html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <h2 style="color: #4f46e5;">Olá, ${name}!</h2>
-            <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
-            <p>Para ativar sua conta, clique no botão abaixo:</p>
-            <p style="text-align: center;">
-              <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-                Confirmar E-mail
-              </a>
-            </p>
-            <p>Ou copie e cole este link no seu navegador:</p>
-            <p style="word-break: break-all;">${verifyUrl}</p>
-            <hr style="margin: 24px 0;" />
-            <p style="font-size: 12px; color: #888;">
-              Se você não se registrou no PetCare, pode ignorar este e-mail.
-            </p>
-          </div>
-        `,
+      html: generateVerificationEmail(name, verifyUrl),
     });
 
     res.status(201).json({
@@ -93,13 +83,10 @@ exports.resendVerificationEmail = async (req, res) => {
     const { email } = req.body;
     const user = await User.findOne({ email });
 
-    if (!user) {
+    if (!user)
       return res.status(404).json({ message: "Usuário não encontrado" });
-    }
-
-    if (user.isVerified) {
+    if (user.isVerified)
       return res.status(400).json({ message: "E-mail já foi verificado" });
-    }
 
     user.emailToken = crypto.randomBytes(32).toString("hex");
     await user.save();
@@ -110,24 +97,7 @@ exports.resendVerificationEmail = async (req, res) => {
       from: `"PetCare" <${EMAIL_USER}>`,
       to: email,
       subject: "Reenvio: Confirme seu e-mail no PetCare",
-      html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-            <h2 style="color: #4f46e5;">Olá, ${user.name}!</h2>
-            <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
-            <p>Para ativar sua conta, clique no botão abaixo:</p>
-            <p style="text-align: center;">
-              <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-                Confirmar E-mail
-              </a>
-            </p>
-            <p>Ou copie e cole este link no seu navegador:</p>
-            <p style="word-break: break-all;">${verifyUrl}</p>
-            <hr style="margin: 24px 0;" />
-            <p style="font-size: 12px; color: #888;">
-              Se você não se registrou no PetCare, pode ignorar este e-mail.
-            </p>
-          </div>
-        `,
+      html: generateVerificationEmail(user.name, verifyUrl),
     });
 
     res.json({ message: "E-mail de confirmação reenviado com sucesso." });
@@ -282,18 +252,7 @@ exports.forgotPassword = async (req, res) => {
     from: `"PetCare" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: "Redefinição de senha PetCare",
-    html: `
-        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
-          <h2 style="color:#4f46e5;">Olá, ${user.name}!</h2>
-          <p>Recebemos um pedido para redefinir sua senha.</p>
-          <p>Clique no link abaixo para criar uma nova senha (válido por 1 hora):</p>
-          <p><a href="${resetUrl}" style="background:#4f46e5;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Redefinir Senha</a></p>
-          <p>Ou copie e cole este link no navegador:</p>
-          <p style="word-break:break-all;">${resetUrl}</p>
-          <hr style="margin:24px 0;"/>
-          <p style="font-size:12px;color:#888;">Se você não solicitou, ignore este e-mail.</p>
-        </div>
-      `,
+    html: generateResetPasswordEmail(user.name, resetUrl),
   });
 
   res.json({

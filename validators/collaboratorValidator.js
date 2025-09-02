@@ -14,8 +14,14 @@ exports.validateAcceptInvite = [
     .trim()
     .escape(),
   body("password")
-    .isStrongPassword({ minLength: 6 })
+    .isStrongPassword({
+      minLength: 8,
+      minLowercase: 1,
+      minUppercase: 1,
+      minNumbers: 1,
+      minSymbols: 0,
+    })
     .withMessage(
-      "A senha deve ter no mínimo 6 caracteres, incluindo letras e números"
+      "A nova senha deve ter pelo menos 8 caracteres, incluindo letras maiúsculas, minúsculas e números"
     ),
 ];

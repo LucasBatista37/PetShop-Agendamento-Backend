@@ -5,7 +5,8 @@ const crypto = require("crypto");
 const transporter = require("../utils/mailer");
 const { validationResult } = require("express-validator");
 const { generateVerificationEmail } = require("../utils/emailTemplates");
-const { generateResetPasswordEmail } = require("../utils/emailTemplates");  
+const { generateResetPasswordEmail } = require("../utils/emailTemplates");
+const { createUser } = require("../services/userService");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const EMAIL_USER = process.env.EMAIL_USER;
@@ -28,15 +29,11 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: "E-mail já cadastrado" });
     }
 
-    const hashed = await bcrypt.hash(password, 10);
-    const emailToken = crypto.randomBytes(32).toString("hex");
-
-    const user = await User.create({
+    const { user, emailToken } = await createUser({
       name,
       email,
       phone,
-      password: hashed,
-      emailToken,
+      password,
     });
 
     const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${emailToken}&email=${email}`;

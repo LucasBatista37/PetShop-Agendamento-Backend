@@ -3,6 +3,7 @@ const bcrypt = require("bcryptjs");
 const Invite = require("../models/Invite");
 const User = require("../models/User");
 const transporter = require("../utils/mailer");
+const { createUser } = require("../services/userService");
 const { generateInviteCollaboratorEmail } = require("../utils/emailTemplates");
 
 exports.inviteCollaborator = async (req, res) => {
@@ -20,7 +21,7 @@ exports.inviteCollaborator = async (req, res) => {
     await Invite.deleteMany({ email, accepted: false });
 
     const token = crypto.randomBytes(32).toString("hex");
-    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; 
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
 
     await Invite.create({
       email,
@@ -51,7 +52,9 @@ exports.acceptInvite = async (req, res) => {
     const { token, email, name, password } = req.body;
 
     if (![token, email, name, password].every(Boolean)) {
-      return res.status(400).json({ message: "Todos os campos são obrigatórios." });
+      return res
+        .status(400)
+        .json({ message: "Todos os campos são obrigatórios." });
     }
 
     const invite = await Invite.findOne({
@@ -65,23 +68,23 @@ exports.acceptInvite = async (req, res) => {
       return res.status(400).json({ message: "Convite inválido ou expirado." });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await User.create({
+    const { user } = await createUser({
       name,
       email,
-      password: hashedPassword,
+      password,
       department: invite.department,
       role: "collaborator",
-      isVerified: true,
       owner: invite.owner,
+      verified: true,
     });
 
     invite.accepted = true;
     invite.acceptedAt = new Date();
     await invite.save();
 
-    res.json({ message: "Conta criada com sucesso. Agora você pode fazer login." });
+    res.json({
+      message: "Conta criada com sucesso. Agora você pode fazer login.",
+    });
   } catch (err) {
     console.error("Erro ao aceitar convite:", err);
     res.status(500).json({ message: "Erro ao aceitar convite." });

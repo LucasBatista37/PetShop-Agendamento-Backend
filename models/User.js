@@ -31,6 +31,12 @@ const userSchema = new mongoose.Schema(
     inviteExpires: { type: Date },
     inviteAcceptedAt: { type: Date },
     department: { type: String, trim: true },
+    subscription: {
+      stripeCustomerId: { type: String },
+      stripeSubscriptionId: { type: String },
+      status: { type: String, default: "inactive" },
+      currentPeriodEnd: { type: Date },
+    },
   },
   { timestamps: true }
 );

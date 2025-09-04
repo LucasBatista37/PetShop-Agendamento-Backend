@@ -24,6 +24,7 @@ const userSchema = new mongoose.Schema(
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      default: null, // garante consistência com createUser
     },
     refreshToken: { type: String },
     invitedBy: { type: String },
@@ -32,10 +33,14 @@ const userSchema = new mongoose.Schema(
     inviteAcceptedAt: { type: Date },
     department: { type: String, trim: true },
     subscription: {
-      stripeCustomerId: { type: String },
-      stripeSubscriptionId: { type: String },
-      status: { type: String, default: "inactive" },
-      currentPeriodEnd: { type: Date },
+      stripeCustomerId: { type: String, default: null },
+      stripeSubscriptionId: { type: String, default: null },
+      status: {
+        type: String,
+        enum: ["inactive", "active", "past_due", "canceled"],
+        default: "inactive",
+      },
+      currentPeriodEnd: { type: Date, default: null },
     },
   },
   { timestamps: true }

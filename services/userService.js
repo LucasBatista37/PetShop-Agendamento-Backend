@@ -2,7 +2,16 @@ const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 const crypto = require("crypto");
 
-async function createUser({ name, email, phone, password, department, role = "user", owner = null, verified = false }) {
+async function createUser({
+  name,
+  email,
+  phone,
+  password,
+  department,
+  role = "admin",
+  owner = null,
+  isVerified = false, // padronizado com schema
+}) {
   const hashedPassword = await bcrypt.hash(password, 10);
   const emailToken = crypto.randomBytes(32).toString("hex");
 
@@ -15,7 +24,7 @@ async function createUser({ name, email, phone, password, department, role = "us
     role,
     owner,
     emailToken,
-    isVerified: verified,
+    isVerified,
   });
 
   return { user, emailToken };

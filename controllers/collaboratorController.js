@@ -93,12 +93,31 @@ exports.acceptInvite = async (req, res) => {
 
 exports.getAllCollaborators = async (req, res) => {
   try {
-    const collaborators = await User.find({
-      role: "collaborator",
-      owner: req.user._id,
-    }).select("-password");
+    const { page = 1, limit = 10 } = req.query;
+    const ownerId = req.user._id;
 
-    res.json({ collaborators });
+    const query = { role: "collaborator", owner: ownerId };
+
+    const totalItems = await User.countDocuments(query);
+
+    const totalPages = Math.ceil(totalItems / limit);
+    const currentPage = Math.min(Math.max(parseInt(page), 1), totalPages || 1);
+
+    const collaborators = await User.find(query)
+      .select("-password")
+      .skip((currentPage - 1) * limit)
+      .limit(parseInt(limit))
+      .sort({ createdAt: -1 });
+
+    res.json({
+      collaborators,
+      pagination: {
+        totalItems,
+        totalPages,
+        currentPage,
+        rowsPerPage: parseInt(limit),
+      },
+    });
   } catch (err) {
     console.error("Erro ao listar colaboradores:", err);
     res.status(500).json({ message: "Erro ao listar colaboradores." });

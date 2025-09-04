@@ -28,7 +28,7 @@ exports.createAppointment = async (req, res) => {
 
     const total = extras.reduce((acc, e) => acc + e.price, base.price);
 
-    const ownerId = getOwnerId(req.user); 
+    const ownerId = getOwnerId(req.user);
 
     const appoint = await Appointment.create({
       petName,
@@ -62,11 +62,25 @@ exports.getAllAppointments = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
 
-    const list = await Appointment.find({ user: ownerId })
-      .populate("baseService")
-      .populate("extraServices");
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
 
-    res.json(list);
+    const [appointments, total] = await Promise.all([
+      Appointment.find({ user: ownerId })
+        .populate("baseService")
+        .populate("extraServices")
+        .skip(skip)
+        .limit(limit),
+      Appointment.countDocuments({ user: ownerId }),
+    ]);
+
+    res.json({
+      data: appointments,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Erro ao listar agendamentos" });

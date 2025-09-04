@@ -7,6 +7,7 @@ const serviceRoutes = require("./routes/service.routes");
 const indexRoutes = require("./routes/index.routes");
 const appointmentRoutes = require("./routes/appointment.routes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const colaboratorRoutes = require("./routes/collaborator");
 const supportRoutes = require("./routes/support.routes.js");
 const stripeRoutes = require("./routes/stripe.routes");
 const stripeWebhook = require("./routes/stripe.webhook");
@@ -32,6 +33,7 @@ app.use("/api/services", serviceRoutes);
 app.use("/api", indexRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/collaborators", colaboratorRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/stripe", stripeRoutes);
 

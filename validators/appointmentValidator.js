@@ -40,8 +40,7 @@ const appointmentValidationRules = [
     .withMessage("O nome do tutor deve ter no máximo 100 caracteres."),
 
   body("ownerPhone")
-    .notEmpty()
-    .withMessage("O telefone do tutor é obrigatório.")
+    .optional({ checkFalsy: true }) 
     .matches(/^\(?\d{2}\)?\s?\d{4,5}-?\d{4}$/)
     .withMessage(
       "O telefone deve estar no formato (11) 99999-1234 ou 11999991234."

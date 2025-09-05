@@ -1,6 +1,14 @@
 const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middlewares/authMiddleware");
+const rateLimit = require("express-rate-limit");
+const {
+  validateRegister,
+  validateChangePassword,
+  validateForgotPassword,
+  validateResetPassword,
+} = require("../validators/authValidator");
+
 const {
   register,
   verifyEmail,
@@ -12,17 +20,32 @@ const {
   changePassword,
   forgotPassword,
   resetPassword,
+  refreshToken,
+  logout,
 } = require("../controllers/authController");
 
-router.post("/register", register);
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: "Muitas tentativas de login. Tente novamente mais tarde.",
+});
+
+router.post("/register", validateRegister, register);
 router.get("/verify-email", verifyEmail);
 router.post("/resend-verification", resendVerificationEmail);
-router.post("/login", login);
+router.post("/login", loginLimiter, login);
+router.post("/refresh", authMiddleware, refreshToken);
+router.post("/logout", authMiddleware, logout);
 router.put("/me", authMiddleware, updateProfile);
 router.delete("/me", authMiddleware, deleteProfile);
 router.get("/me", authMiddleware, getProfile);
-router.put("/change-password", authMiddleware, changePassword);
-router.post("/forgot-password", forgotPassword);
-router.post("/reset-password", resetPassword);
+router.put(
+  "/change-password",
+  authMiddleware,
+  validateChangePassword,
+  changePassword
+);
+router.post("/forgot-password", validateForgotPassword, forgotPassword);
+router.post("/reset-password", validateResetPassword, resetPassword);
 
 module.exports = router;

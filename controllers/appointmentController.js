@@ -1,5 +1,6 @@
 const Appointment = require("../models/Appointment");
 const Service = require("../models/Service");
+const getOwnerId = require("../utils/getOwnerId");
 
 exports.createAppointment = async (req, res) => {
   try {
@@ -27,6 +28,8 @@ exports.createAppointment = async (req, res) => {
 
     const total = extras.reduce((acc, e) => acc + e.price, base.price);
 
+    const ownerId = getOwnerId(req.user);
+
     const appoint = await Appointment.create({
       petName,
       species,
@@ -41,7 +44,7 @@ exports.createAppointment = async (req, res) => {
       time,
       status,
       price: total,
-      user: req.userId,
+      user: ownerId,
     });
 
     const populated = await Appointment.findById(appoint._id)
@@ -55,12 +58,29 @@ exports.createAppointment = async (req, res) => {
   }
 };
 
-exports.getAllAppointments = async (_req, res) => {
+exports.getAllAppointments = async (req, res) => {
   try {
-    const list = await Appointment.find({ user: _req.userId }) 
-      .populate("baseService")
-      .populate("extraServices");
-    res.json(list);
+    const ownerId = getOwnerId(req.user);
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const [appointments, total] = await Promise.all([
+      Appointment.find({ user: ownerId })
+        .populate("baseService")
+        .populate("extraServices")
+        .skip(skip)
+        .limit(limit),
+      Appointment.countDocuments({ user: ownerId }),
+    ]);
+
+    res.json({
+      data: appointments,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalItems: total,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Erro ao listar agendamentos" });
@@ -68,11 +88,21 @@ exports.getAllAppointments = async (_req, res) => {
 };
 
 exports.getAppointmentById = async (req, res) => {
+  const ownerId = getOwnerId(req.user);
+  if (req.appointment.user.toString() !== ownerId.toString()) {
+    return res.status(403).json({ message: "Acesso negado ao agendamento." });
+  }
+
   res.json(req.appointment);
 };
 
 exports.updateAppointment = async (req, res) => {
   try {
+    const ownerId = getOwnerId(req.user);
+    if (req.appointment.user.toString() !== ownerId.toString()) {
+      return res.status(403).json({ message: "Acesso negado ao agendamento." });
+    }
+
     Object.assign(req.appointment, req.body);
 
     if (req.body.baseService || req.body.extraServices) {
@@ -100,6 +130,11 @@ exports.updateAppointment = async (req, res) => {
 
 exports.deleteAppointment = async (req, res) => {
   try {
+    const ownerId = getOwnerId(req.user);
+    if (req.appointment.user.toString() !== ownerId.toString()) {
+      return res.status(403).json({ message: "Acesso negado ao agendamento." });
+    }
+
     await req.appointment.deleteOne();
     res.json({ message: "Agendamento excluído com sucesso" });
   } catch (err) {

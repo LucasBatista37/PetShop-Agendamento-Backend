@@ -3,6 +3,10 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const crypto = require("crypto");
 const transporter = require("../utils/mailer");
+const { validationResult } = require("express-validator");
+const { generateVerificationEmail } = require("../utils/emailTemplates");
+const { generateResetPasswordEmail } = require("../utils/emailTemplates");
+const { createUser } = require("../services/userService");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const EMAIL_USER = process.env.EMAIL_USER;
@@ -15,21 +19,21 @@ if (!BASE_URL) throw new Error("Variável BASE_URL não definida");
 if (!CLIENT_URL) throw new Error("Variável CLIENT_URL não definida");
 
 exports.register = async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
   try {
     const { name, email, phone, password } = req.body;
     if (await User.findOne({ email })) {
       return res.status(400).json({ message: "E-mail já cadastrado" });
     }
 
-    const hashed = await bcrypt.hash(password, 10);
-    const emailToken = crypto.randomBytes(32).toString("hex");
-
-    const user = await User.create({
+    const { user, emailToken } = await createUser({
       name,
       email,
       phone,
-      password: hashed,
-      emailToken,
+      password,
     });
 
     const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${emailToken}&email=${email}`;
@@ -38,24 +42,7 @@ exports.register = async (req, res) => {
       from: `"PetCare" <${EMAIL_USER}>`,
       to: email,
       subject: "Confirme seu e-mail no PetCare",
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-          <h2 style="color: #4f46e5;">Olá, ${name}!</h2>
-          <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
-          <p>Para ativar sua conta, clique no botão abaixo:</p>
-          <p style="text-align: center;">
-            <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-              Confirmar E-mail
-            </a>
-          </p>
-          <p>Ou copie e cole este link no seu navegador:</p>
-          <p style="word-break: break-all;">${verifyUrl}</p>
-          <hr style="margin: 24px 0;" />
-          <p style="font-size: 12px; color: #888;">
-            Se você não se registrou no PetCare, pode ignorar este e-mail.
-          </p>
-        </div>
-      `,
+      html: generateVerificationEmail(name, verifyUrl),
     });
 
     res.status(201).json({
@@ -93,13 +80,10 @@ exports.resendVerificationEmail = async (req, res) => {
     const { email } = req.body;
     const user = await User.findOne({ email });
 
-    if (!user) {
+    if (!user)
       return res.status(404).json({ message: "Usuário não encontrado" });
-    }
-
-    if (user.isVerified) {
+    if (user.isVerified)
       return res.status(400).json({ message: "E-mail já foi verificado" });
-    }
 
     user.emailToken = crypto.randomBytes(32).toString("hex");
     await user.save();
@@ -110,24 +94,7 @@ exports.resendVerificationEmail = async (req, res) => {
       from: `"PetCare" <${EMAIL_USER}>`,
       to: email,
       subject: "Reenvio: Confirme seu e-mail no PetCare",
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-          <h2 style="color: #4f46e5;">Olá, ${user.name}!</h2>
-          <p>Obrigado por se cadastrar no <strong>PetCare</strong>.</p>
-          <p>Para ativar sua conta, clique no botão abaixo:</p>
-          <p style="text-align: center;">
-            <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background-color: #4f46e5; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-              Confirmar E-mail
-            </a>
-          </p>
-          <p>Ou copie e cole este link no seu navegador:</p>
-          <p style="word-break: break-all;">${verifyUrl}</p>
-          <hr style="margin: 24px 0;" />
-          <p style="font-size: 12px; color: #888;">
-            Se você não se registrou no PetCare, pode ignorar este e-mail.
-          </p>
-        </div>
-      `,
+      html: generateVerificationEmail(user.name, verifyUrl),
     });
 
     res.json({ message: "E-mail de confirmação reenviado com sucesso." });
@@ -140,30 +107,52 @@ exports.resendVerificationEmail = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     const user = await User.findOne({ email });
 
-    const validCredentials =
-      user && (await bcrypt.compare(password, user.password));
-
-    if (!validCredentials || !user.isVerified) {
-      return res.status(400).json({
-        message: "Credenciais inválidas ou e-mail não verificado.",
-      });
+    if (!user || !user.password) {
+      return res.status(400).json({ message: "Credenciais inválidas." });
     }
 
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
-      expiresIn: "7d",
+    const validCredentials = await bcrypt.compare(password, user.password);
+
+    if (!validCredentials || !user.isVerified) {
+      return res
+        .status(400)
+        .json({ message: "Credenciais inválidas ou e-mail não verificado." });
+    }
+
+    const accessToken = jwt.sign({ userId: user._id }, JWT_SECRET, {
+      expiresIn: "15m",
     });
 
-    res.json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-      },
-    });
+    const refreshToken = jwt.sign(
+      { userId: user._id },
+      process.env.REFRESH_SECRET,
+      {
+        expiresIn: "30d",
+      }
+    );
+
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    res
+      .cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "Strict",
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+      })
+      .json({
+        accessToken,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+        },
+      });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Erro no servidor" });
@@ -172,9 +161,10 @@ exports.login = async (req, res) => {
 
 exports.getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select("-password");
-    if (!user)
+    const user = await User.findById(req.user._id).select("-password");
+    if (!user) {
       return res.status(404).json({ message: "Usuário não encontrado" });
+    }
     res.json({ user });
   } catch (err) {
     console.error(err);
@@ -185,11 +175,13 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const { name, phone } = req.body;
+
     const user = await User.findByIdAndUpdate(
-      req.userId,
+      req.user._id,
       { name, phone },
       { new: true, runValidators: true }
     ).select("-password");
+
     res.json({ user });
   } catch (err) {
     console.error(err);
@@ -199,7 +191,7 @@ exports.updateProfile = async (req, res) => {
 
 exports.deleteProfile = async (req, res) => {
   try {
-    await User.findByIdAndDelete(req.userId);
+    await User.findByIdAndDelete(req.user._id);
     res.json({ message: "Usuário excluído com sucesso" });
   } catch (err) {
     console.error(err);
@@ -216,7 +208,8 @@ exports.changePassword = async (req, res) => {
         .json({ message: "É preciso informar senha atual e nova senha." });
     }
 
-    const user = await User.findById(req.userId);
+    const user = await User.findById(req.user._id);
+
     if (!user) {
       return res.status(404).json({ message: "Usuário não encontrado." });
     }
@@ -256,18 +249,7 @@ exports.forgotPassword = async (req, res) => {
     from: `"PetCare" <${process.env.EMAIL_USER}>`,
     to: email,
     subject: "Redefinição de senha PetCare",
-    html: `
-      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#333;">
-        <h2 style="color:#4f46e5;">Olá, ${user.name}!</h2>
-        <p>Recebemos um pedido para redefinir sua senha.</p>
-        <p>Clique no link abaixo para criar uma nova senha (válido por 1 hora):</p>
-        <p><a href="${resetUrl}" style="background:#4f46e5;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;">Redefinir Senha</a></p>
-        <p>Ou copie e cole este link no navegador:</p>
-        <p style="word-break:break-all;">${resetUrl}</p>
-        <hr style="margin:24px 0;"/>
-        <p style="font-size:12px;color:#888;">Se você não solicitou, ignore este e-mail.</p>
-      </div>
-    `,
+    html: generateResetPasswordEmail(user.name, resetUrl),
   });
 
   res.json({
@@ -299,4 +281,51 @@ exports.resetPassword = async (req, res) => {
   await user.save();
 
   res.json({ message: "Senha redefinida com sucesso." });
+};
+
+exports.refreshToken = async (req, res) => {
+  const token = req.cookies.refreshToken;
+  if (!token) return res.sendStatus(401);
+
+  try {
+    const decoded = jwt.verify(token, process.env.REFRESH_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user || user.refreshToken !== token) return res.sendStatus(403);
+
+    const newAccessToken = jwt.sign({ userId: user._id }, JWT_SECRET, {
+      expiresIn: "15m",
+    });
+
+    res.json({ accessToken: newAccessToken });
+  } catch (err) {
+    console.error("Erro ao renovar token:", err);
+    res.sendStatus(403);
+  }
+};
+
+exports.logout = async (req, res) => {
+  try {
+    const token = req.cookies?.refreshToken;
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, process.env.REFRESH_SECRET);
+        const user = await User.findById(decoded.userId);
+        if (user) {
+          user.refreshToken = null;
+          await user.save();
+        }
+      } catch (err) {
+        console.warn("Token inválido ou expirado:", err.message);
+      }
+    }
+
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "Strict",
+    });
+    res.json({ message: "Logout realizado com sucesso." });
+  } catch (err) {
+    res.status(500).json({ message: "Erro ao sair da conta" });
+  }
 };

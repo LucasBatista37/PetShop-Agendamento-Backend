@@ -42,7 +42,6 @@ exports.inviteCollaborator = async (req, res) => {
 
     res.json({ message: "Convite enviado com sucesso." });
   } catch (err) {
-    console.error("Erro ao enviar convite:", err);
     res.status(500).json({ message: "Erro interno ao enviar convite." });
   }
 };
@@ -75,8 +74,15 @@ exports.acceptInvite = async (req, res) => {
       department: invite.department,
       role: "collaborator",
       owner: invite.owner,
-      verified: true,
+      isVerified: true,
+      pendingInvitation: false,
+      skipEmailToken: true,
     });
+
+    user.inviteAcceptedAt = new Date();
+    user.invitedBy = invite.owner ? invite.owner.toString() : undefined;
+    user.emailToken = undefined;
+    await user.save();
 
     invite.accepted = true;
     invite.acceptedAt = new Date();
@@ -86,7 +92,7 @@ exports.acceptInvite = async (req, res) => {
       message: "Conta criada com sucesso. Agora você pode fazer login.",
     });
   } catch (err) {
-    console.error("Erro ao aceitar convite:", err);
+    console.error("💥 Erro ao aceitar convite:", err);
     res.status(500).json({ message: "Erro ao aceitar convite." });
   }
 };
@@ -119,7 +125,6 @@ exports.getAllCollaborators = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("Erro ao listar colaboradores:", err);
     res.status(500).json({ message: "Erro ao listar colaboradores." });
   }
 };

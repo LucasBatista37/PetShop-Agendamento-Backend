@@ -15,27 +15,18 @@ const {
   validateService,
 } = require("../validators/serviceValidator");
 
-router.post(
-  "/",
-  authMiddleware,
-  serviceValidationRules,
-  validateService,
-  createService
-);
+router.use(authMiddleware);
 
-router.get("/", authMiddleware, getAllServices);
-
-router.get("/:id", authMiddleware, serviceMiddleware, getServiceById);
-
+router.post("/", serviceValidationRules, validateService, createService);
+router.get("/", getAllServices);
+router.get("/:id", serviceMiddleware, getServiceById);
 router.put(
   "/:id",
-  authMiddleware,
   serviceMiddleware,
-  serviceValidationRules, 
-  validateService, 
+  serviceValidationRules,
+  validateService,
   updateService
 );
-
-router.delete("/:id", authMiddleware, serviceMiddleware, deleteService);
+router.delete("/:id", serviceMiddleware, deleteService);
 
 module.exports = router;

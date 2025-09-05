@@ -305,13 +305,17 @@ exports.refreshToken = async (req, res) => {
 
 exports.logout = async (req, res) => {
   try {
-    const token = req.cookies.refreshToken;
+    const token = req.cookies?.refreshToken;
     if (token) {
-      const decoded = jwt.verify(token, process.env.REFRESH_SECRET);
-      const user = await User.findById(decoded.userId);
-      if (user) {
-        user.refreshToken = null;
-        await user.save();
+      try {
+        const decoded = jwt.verify(token, process.env.REFRESH_SECRET);
+        const user = await User.findById(decoded.userId);
+        if (user) {
+          user.refreshToken = null;
+          await user.save();
+        }
+      } catch (err) {
+        console.warn("Token inválido ou expirado:", err.message);
       }
     }
 
@@ -320,10 +324,8 @@ exports.logout = async (req, res) => {
       secure: process.env.NODE_ENV === "production",
       sameSite: "Strict",
     });
-
     res.json({ message: "Logout realizado com sucesso." });
   } catch (err) {
-    console.error("Erro no logout:", err);
     res.status(500).json({ message: "Erro ao sair da conta" });
   }
 };

@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema(
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      default: null, // garante consistência com createUser
+      default: null,
     },
     refreshToken: { type: String },
     invitedBy: { type: String },

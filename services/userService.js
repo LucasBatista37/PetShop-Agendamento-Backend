@@ -10,12 +10,16 @@ async function createUser({
   department,
   role = "admin",
   owner = null,
-  isVerified = false, // padronizado com schema
+  isVerified = false,
+  pendingInvitation = false,
+  skipEmailToken = false,   
 }) {
   const hashedPassword = await bcrypt.hash(password, 10);
-  const emailToken = crypto.randomBytes(32).toString("hex");
+  const emailToken = skipEmailToken
+    ? null
+    : crypto.randomBytes(32).toString("hex");
 
-  const user = await User.create({
+  const userData = {
     name,
     email,
     phone,
@@ -23,9 +27,15 @@ async function createUser({
     department,
     role,
     owner,
-    emailToken,
     isVerified,
-  });
+    pendingInvitation,
+  };
+
+  if (!skipEmailToken) {
+    userData.emailToken = emailToken;
+  }
+
+  const user = await User.create(userData);
 
   return { user, emailToken };
 }

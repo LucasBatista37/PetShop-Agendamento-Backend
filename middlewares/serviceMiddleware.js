@@ -7,7 +7,7 @@ module.exports = async (req, res, next) => {
       return res.status(404).json({ message: "Serviço não encontrado" });
     }
 
-    if (service.user.toString() !== req.userId) {
+    if (service.user.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: "Acesso não autorizado" });
     }
 
@@ -16,5 +16,5 @@ module.exports = async (req, res, next) => {
   } catch (err) {
     console.error(err);
     res.status(400).json({ message: "ID de serviço inválido" });
-  }
+  } 
 };

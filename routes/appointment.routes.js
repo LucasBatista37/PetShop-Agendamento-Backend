@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middlewares/authMiddleware");
 const appointmentMiddleware = require("../middlewares/appointmentMiddleware");
+const multer = require("multer");
+const upload = multer({ dest: "uploads/" });
 
 const {
   appointmentValidationRules,
@@ -14,6 +16,8 @@ const {
   getAppointmentById,
   updateAppointment,
   deleteAppointment,
+  uploadAppointments,
+  getUploadStatus,
 } = require("../controllers/appointmentController");
 
 router.use(authMiddleware);
@@ -36,6 +40,9 @@ router.put(
   validateAppointment,
   updateAppointment
 );
+
+router.post("/upload", upload.single("file"), uploadAppointments);
+router.get("/upload/status/:jobId", getUploadStatus);
 
 router.delete("/:id", appointmentMiddleware, deleteAppointment);
 

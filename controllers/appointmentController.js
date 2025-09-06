@@ -1,6 +1,13 @@
 const Appointment = require("../models/Appointment");
 const Service = require("../models/Service");
 const getOwnerId = require("../utils/getOwnerId");
+const { Queue, Job } = require("bullmq");
+const { redisConnection } = require("../utils/redis");
+const path = require("path");
+
+const appointmentQueue = new Queue("appointments", {
+  connection: redisConnection,
+});
 
 exports.createAppointment = async (req, res) => {
   try {
@@ -140,5 +147,48 @@ exports.deleteAppointment = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Erro ao excluir agendamento" });
+  }
+};
+
+exports.uploadAppointments = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Nenhum arquivo enviado." });
+    }
+
+    const ownerId = req.user.id || req.user._id;
+
+    const job = await appointmentQueue.add("import", {
+      filePath: path.resolve(req.file.path),
+      ownerId,
+    });
+
+    res.status(202).json({
+      message: "Arquivo recebido e em processamento.",
+      jobId: job.id,
+    });
+  } catch (err) {
+    console.error("Erro no upload:", err);
+    res.status(500).json({ message: "Erro ao enviar arquivo." });
+  }
+};
+
+exports.getUploadStatus = async (req, res) => {
+  try {
+    const jobId = req.params.jobId;
+    const job = await Job.fromId(appointmentQueue, jobId);
+
+    if (!job) {
+      return res.status(404).json({ message: "Job não encontrado." });
+    }
+
+    const state = await job.getState(); 
+    const progress = job.progress;
+    const result = job.returnvalue;
+
+    res.json({ state, progress, result });
+  } catch (err) {
+    console.error("Erro ao consultar status:", err);
+    res.status(500).json({ message: "Erro ao consultar status." });
   }
 };

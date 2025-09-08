@@ -53,3 +53,16 @@ exports.generateInviteCollaboratorEmail = (inviteUrl) => `
     </p>
   </div>
 `;
+
+exports.generateWelcomeEmail = (name) => `
+  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2 style="color: #4f46e5;">Bem-vindo ao PetCare, ${name}!</h2>
+    <p>Estamos muito felizes em ter você como assinante 🎉</p>
+    <p>A partir de agora você terá acesso completo ao nosso sistema de agendamento e gestão PetCare.</p>
+    <p>Esperamos que sua experiência seja incrível!</p>
+    <hr style="margin: 24px 0;" />
+    <p style="font-size: 12px; color: #888;">
+      Caso tenha dúvidas ou precise de suporte, entre em contato com nossa equipe de atendimento.
+    </p>
+  </div>
+`;

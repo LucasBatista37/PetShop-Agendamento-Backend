@@ -293,7 +293,7 @@ exports.refreshToken = async (req, res) => {
     if (!user || user.refreshToken !== token) return res.sendStatus(403);
 
     const newAccessToken = jwt.sign({ userId: user._id }, JWT_SECRET, {
-      expiresIn: "15m",
+      expiresIn: "1m",
     });
 
     res.json({ accessToken: newAccessToken });

@@ -12,12 +12,16 @@ async function createUser({
   owner = null,
   isVerified = false,
   pendingInvitation = false,
-  skipEmailToken = false,   
+  skipEmailToken = false,
 }) {
   const hashedPassword = await bcrypt.hash(password, 10);
   const emailToken = skipEmailToken
     ? null
     : crypto.randomBytes(32).toString("hex");
+
+  const now = new Date();
+  const freeTrialEnd = new Date();
+  freeTrialEnd.setMonth(freeTrialEnd.getMonth() + 1); 
 
   const userData = {
     name,
@@ -29,6 +33,13 @@ async function createUser({
     owner,
     isVerified,
     pendingInvitation,
+    subscription: {
+      stripeCustomerId: null, 
+      stripeSubscriptionId: null,
+      status: "trial",
+      currentPeriodStart: now,
+      currentPeriodEnd: freeTrialEnd,
+    },
   };
 
   if (!skipEmailToken) {

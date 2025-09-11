@@ -23,6 +23,7 @@ app.set("trust proxy", 1);
 const allowedOrigins = [
   "http://localhost:5173",
   "https://pet-shop-agendamento-sistema.vercel.app",
+  "https://www.petcarezone.shop",
 ];
 
 app.use(

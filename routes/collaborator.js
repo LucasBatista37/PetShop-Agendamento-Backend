@@ -1,12 +1,12 @@
 const express = require("express");
 const router = express.Router();
-const auth = require("../middlewares/authMiddleware");
 const controller = require("../controllers/collaboratorController");
 const {
   validateInvite,
   validateAcceptInvite,
 } = require("../validators/collaboratorValidator");
 const { validationResult } = require("express-validator");
+const authMiddleware = require("../middlewares/authMiddleware");
 
 const runValidation = (req, res, next) => {
   const errors = validationResult(req);
@@ -23,7 +23,7 @@ router.post(
   controller.acceptInvite
 );
 
-router.use(auth);
+router.use(authMiddleware);
 
 router.post(
   "/invite",

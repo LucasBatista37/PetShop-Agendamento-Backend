@@ -53,3 +53,31 @@ exports.generateInviteCollaboratorEmail = (inviteUrl) => `
     </p>
   </div>
 `;
+
+exports.generateWelcomeEmail = (name) => `
+  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2 style="color: #4f46e5;">Bem-vindo ao PetCare, ${name}!</h2>
+    <p>Estamos muito felizes em ter você como assinante 🎉</p>
+    <p>A partir de agora você terá acesso completo ao nosso sistema de agendamento e gestão PetCare.</p>
+    <p>Esperamos que sua experiência seja incrível!</p>
+    <hr style="margin: 24px 0;" />
+    <p style="font-size: 12px; color: #888;">
+      Caso tenha dúvidas ou precise de suporte, entre em contato com nossa equipe de atendimento.
+    </p>
+  </div>
+`;
+
+exports.generateTrialEndingEmail = (name) => `
+  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2>Olá, ${name} 👋</h2>
+    <p>Seu período de teste de 30 dias no <b>PetCare</b> está quase acabando.</p>
+    <p>Para continuar usando sem interrupções, adicione uma forma de pagamento no link abaixo:</p>
+    <p style="text-align:center;">
+      <a href="${process.env.CLIENT_URL}/billing" 
+         style="padding:10px 20px;background:#4e14a6;color:#fff;text-decoration:none;border-radius:6px;">
+        Ativar Assinatura
+      </a>
+    </p>
+    <p>Obrigado por confiar no PetCare 🐾</p>
+  </div>
+`;

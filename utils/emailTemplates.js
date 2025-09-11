@@ -66,3 +66,18 @@ exports.generateWelcomeEmail = (name) => `
     </p>
   </div>
 `;
+
+exports.generateTrialEndingEmail = (name) => `
+  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h2>Olá, ${name} 👋</h2>
+    <p>Seu período de teste de 30 dias no <b>PetCare</b> está quase acabando.</p>
+    <p>Para continuar usando sem interrupções, adicione uma forma de pagamento no link abaixo:</p>
+    <p style="text-align:center;">
+      <a href="${process.env.CLIENT_URL}/billing" 
+         style="padding:10px 20px;background:#4e14a6;color:#fff;text-decoration:none;border-radius:6px;">
+        Ativar Assinatura
+      </a>
+    </p>
+    <p>Obrigado por confiar no PetCare 🐾</p>
+  </div>
+`;

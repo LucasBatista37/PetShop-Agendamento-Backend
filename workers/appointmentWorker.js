@@ -44,7 +44,6 @@ async function startWorker() {
         const { fileId, ownerId } = job.data;
         if (!fileId) throw new Error("job.data.fileId ausente");
 
-        // Baixa o arquivo do GridFS
         const filePath = await downloadFile(fileId);
 
         let rows = [];
@@ -111,7 +110,7 @@ async function startWorker() {
           }
         }
 
-        fs.unlinkSync(filePath); 
+        fs.unlinkSync(filePath);
         console.log(
           `🎉 Job ${job.id} processou ${results.length} agendamentos`
         );

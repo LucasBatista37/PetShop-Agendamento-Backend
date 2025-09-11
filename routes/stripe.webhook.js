@@ -147,6 +147,42 @@ webhookRouter.post(
           }
           break;
 
+        case "customer.subscription.trial_will_end":
+          try {
+            const user = await User.findOne({
+              "subscription.stripeCustomerId": data.customer,
+            });
+
+            if (user) {
+              console.log(
+                `[WEBHOOK] Trial vai expirar para ${
+                  user.email
+                }, fim em ${new Date(data.trial_end * 1000)}`
+              );
+
+              await transporter.sendMail({
+                from: `"PetCare" <${process.env.EMAIL_USER}>`,
+                to: user.email,
+                subject: "⏰ Seu período de teste está acabando!",
+                html: `
+                  <p>Olá ${user.name},</p>
+                  <p>Seu período de teste gratuito do <strong>PetCare</strong> vai terminar em <strong>${new Date(
+                    data.trial_end * 1000
+                  ).toLocaleDateString("pt-BR")}</strong>.</p>
+                  <p>Adicione uma forma de pagamento agora para continuar usando sem interrupções.</p>
+                  <a href="${
+                    process.env.FRONTEND_URL
+                  }/billing" style="background:#4f46e5;color:#fff;padding:10px 20px;border-radius:5px;text-decoration:none;">Adicionar Pagamento</a>
+                `,
+              });
+            }
+          } catch (err) {
+            console.error(
+              `[WEBHOOK] Erro ao processar trial_will_end: ${err.message}`
+            );
+          }
+          break;
+
         case "invoice.paid":
         case "invoice.payment_succeeded":
           if (!data.subscription) break;

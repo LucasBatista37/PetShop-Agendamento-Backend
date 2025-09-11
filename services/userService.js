@@ -36,7 +36,7 @@ async function createUser({
     subscription: {
       stripeCustomerId: null, 
       stripeSubscriptionId: null,
-      status: "trial",
+      status: "trialing",
       currentPeriodStart: now,
       currentPeriodEnd: freeTrialEnd,
     },

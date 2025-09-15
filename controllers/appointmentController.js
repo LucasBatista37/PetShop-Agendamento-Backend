@@ -4,73 +4,124 @@ const Service = require("../models/Service");
 const getOwnerId = require("../utils/getOwnerId");
 const { Queue } = require("bullmq");
 const { redisConnection } = require("../utils/redis");
-const path = require("path");
-const Grid = require("gridfs-stream");
+const { parseISO, isBefore } = require("date-fns");
+const { uploadFileToGridFS } = require("../utils/gridfs");
+const User = require("../models/User");
 
 const appointmentQueue = new Queue("appointments", {
   connection: redisConnection,
 });
 
-let gfs;
-const conn = mongoose.connection;
-conn.once("open", () => {
-  gfs = Grid(conn.db, mongoose.mongo);
-  gfs.collection("uploads");
-});
+const VALID_STATUSES = ["Pendente", "Confirmado", "Cancelado", "Finalizado"];
+
+function validateAppointmentInput(body) {
+  const {
+    petName,
+    ownerName,
+    baseService,
+    date,
+    time,
+    status = "Pendente",
+  } = body;
+
+  if (!petName || !ownerName || !baseService || !date || !time) {
+    return "Campos obrigatórios ausentes.";
+  }
+
+  if (!VALID_STATUSES.includes(status)) {
+    return "Status inválido.";
+  }
+
+  const appointmentDate = parseISO(`${date}T${time}`);
+  if (isBefore(appointmentDate, new Date())) {
+    return "Data e hora do agendamento devem ser futuras.";
+  }
+
+  return null;
+}
+
+async function withTransaction(fn) {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  try {
+    const result = await fn(session);
+    await session.commitTransaction();
+    session.endSession();
+    return result;
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    throw err;
+  }
+}
 
 exports.createAppointment = async (req, res) => {
+  const validationError = validateAppointmentInput(req.body);
+  if (validationError)
+    return res.status(400).json({ message: validationError });
+
   try {
-    const {
-      petName,
-      species,
-      breed,
-      notes,
-      size,
-      ownerName,
-      ownerPhone,
-      baseService,
-      extraServices = [],
-      date,
-      time,
-      status = "Pendente",
-    } = req.body;
+    const populated = await withTransaction(async (session) => {
+      const {
+        petName,
+        species,
+        breed,
+        notes,
+        size,
+        ownerName,
+        ownerPhone,
+        baseService,
+        extraServices = [],
+        date,
+        time,
+        status = "Pendente",
+      } = req.body;
 
-    const base = await Service.findById(baseService);
-    if (!base) {
-      return res.status(400).json({ message: "Serviço base não encontrado" });
-    }
+      const base = await Service.findById(baseService).session(session);
+      if (!base) throw new Error("Serviço base não encontrado.");
 
-    const extras = await Service.find({ _id: { $in: extraServices } });
+      const extras = await Service.find({
+        _id: { $in: extraServices },
+      }).session(session);
+      const total =
+        base.price + extras.reduce((acc, e) => acc + (e.price || 0), 0);
 
-    const total = extras.reduce((acc, e) => acc + e.price, base.price);
+      const ownerId = getOwnerId(req.user);
 
-    const ownerId = getOwnerId(req.user);
+      const appoint = await Appointment.create(
+        [
+          {
+            petName,
+            species,
+            breed,
+            notes,
+            size,
+            ownerName,
+            ownerPhone,
+            baseService,
+            extraServices,
+            date,
+            time,
+            status,
+            price: total,
+            user: ownerId,
+          },
+        ],
+        { session }
+      );
 
-    const appoint = await Appointment.create({
-      petName,
-      species,
-      breed,
-      notes,
-      size,
-      ownerName,
-      ownerPhone,
-      baseService,
-      extraServices,
-      date,
-      time,
-      status,
-      price: total,
-      user: ownerId,
+      return await Appointment.findById(appoint[0]._id)
+        .populate("baseService")
+        .populate("extraServices")
+        .session(session);
     });
-
-    const populated = await Appointment.findById(appoint._id)
-      .populate("baseService")
-      .populate("extraServices");
 
     res.status(201).json(populated);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro ao criar agendamento" });
+    console.error("Erro ao criar agendamento:", err);
+    res
+      .status(500)
+      .json({ message: err.message || "Erro ao criar agendamento" });
   }
 };
 
@@ -78,225 +129,168 @@ exports.getAllAppointments = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
 
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
+    const user = await User.findById(ownerId);
+    const defaultSortOrder = user?.appointmentsSortOrder || "asc";
 
-    const [appointments, total] = await Promise.all([
-      Appointment.find({ user: ownerId })
-        .populate("baseService")
-        .populate("extraServices")
-        .skip(skip)
-        .limit(limit),
-      Appointment.countDocuments({ user: ownerId }),
+    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
+    const finalSortOrder = req.query.sortOrder
+      ? sortOrder
+      : defaultSortOrder === "desc"
+      ? -1
+      : 1;
+
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = Math.min(parseInt(req.query.limit) || 10, 100);
+
+    const search = req.query.search?.trim() || "";
+    const filterStatus = req.query.filterStatus || "";
+    const filterScope = req.query.filterScope || "";
+
+    const match = { user: ownerId };
+    if (search) {
+      match.$or = [
+        { petName: { $regex: search, $options: "i" } },
+        { ownerName: { $regex: search, $options: "i" } },
+      ];
+    }
+    if (filterStatus) match.status = filterStatus;
+
+    const now = new Date();
+    if (filterScope === "today") {
+      match.date = { $gte: startOfDay(now), $lte: endOfDay(now) };
+    } else if (filterScope === "next7days") {
+      match.date = { $gte: startOfDay(now), $lte: endOfDay(addDays(now, 7)) };
+    }
+
+    const results = await Appointment.aggregate([
+      { $match: match },
+      { $sort: { date: finalSortOrder, time: finalSortOrder } },
+      {
+        $facet: {
+          data: [
+            { $skip: (page - 1) * limit },
+            { $limit: limit },
+            {
+              $lookup: {
+                from: "services",
+                localField: "baseService",
+                foreignField: "_id",
+                as: "baseService",
+              },
+            },
+            { $unwind: "$baseService" },
+            {
+              $lookup: {
+                from: "services",
+                localField: "extraServices",
+                foreignField: "_id",
+                as: "extraServices",
+              },
+            },
+          ],
+          totalCount: [{ $count: "count" }],
+        },
+      },
     ]);
+
+    const appointments = results[0].data;
+    const totalItems = results[0].totalCount[0]?.count || 0;
+    const totalPages = Math.ceil(totalItems / limit);
 
     res.json({
       data: appointments,
       currentPage: page,
-      totalPages: Math.ceil(total / limit),
-      totalItems: total,
+      totalPages,
+      totalItems,
+      sortOrder: defaultSortOrder,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Erro ao listar agendamentos:", err);
     res.status(500).json({ message: "Erro ao listar agendamentos" });
   }
 };
 
-exports.getAppointmentById = async (req, res) => {
-  const ownerId = getOwnerId(req.user);
-  if (req.appointment.user.toString() !== ownerId.toString()) {
-    return res.status(403).json({ message: "Acesso negado ao agendamento." });
-  }
+exports.updateSortPreference = async (req, res) => {
+  try {
+    const ownerId = getOwnerId(req.user);
+    const { sortOrder } = req.body;
 
+    if (!["asc", "desc"].includes(sortOrder)) {
+      return res.status(400).json({ message: "SortOrder inválido" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      ownerId,
+      { appointmentsSortOrder: sortOrder },
+      { new: true }
+    );
+
+    res.json({
+      message: "Preferência de ordenação atualizada",
+      sortOrder: user.appointmentsSortOrder,
+    });
+  } catch (err) {
+    console.error("Erro ao atualizar preferência:", err);
+    res.status(500).json({ message: "Erro ao atualizar preferência" });
+  }
+};
+
+exports.getAppointmentById = async (req, res) => {
   res.json(req.appointment);
 };
 
 exports.updateAppointment = async (req, res) => {
   try {
-    const ownerId = getOwnerId(req.user);
-    if (req.appointment.user.toString() !== ownerId.toString()) {
-      return res.status(403).json({ message: "Acesso negado ao agendamento." });
-    }
+    const updated = await withTransaction(async (session) => {
+      if (!req.appointment.user.equals(req.user._id)) {
+        throw { status: 403, message: "Acesso negado ao agendamento." };
+      }
 
-    Object.assign(req.appointment, req.body);
+      Object.assign(req.appointment, req.body);
 
-    if (req.body.baseService || req.body.extraServices) {
-      const base = await Service.findById(req.appointment.baseService);
-      const extras = await Service.find({
-        _id: { $in: req.appointment.extraServices },
-      });
+      if (req.body.baseService || req.body.extraServices) {
+        const base = await Service.findById(
+          req.appointment.baseService
+        ).session(session);
+        const extras = await Service.find({
+          _id: { $in: req.appointment.extraServices },
+        }).session(session);
+        req.appointment.price =
+          base.price + extras.reduce((acc, e) => acc + (e.price || 0), 0);
+      }
 
-      req.appointment.price =
-        base.price + extras.reduce((acc, e) => acc + e.price, 0);
-    }
+      await req.appointment.save({ session });
 
-    await req.appointment.save();
-
-    const updated = await Appointment.findById(req.appointment._id)
-      .populate("baseService")
-      .populate("extraServices");
-
-    res.json(updated);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro ao atualizar agendamento" });
-  }
-};
-
-exports.deleteAppointment = async (req, res) => {
-  try {
-    const ownerId = getOwnerId(req.user);
-    if (req.appointment.user.toString() !== ownerId.toString()) {
-      return res.status(403).json({ message: "Acesso negado ao agendamento." });
-    }
-
-    await req.appointment.deleteOne();
-    res.json({ message: "Agendamento excluído com sucesso" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro ao excluir agendamento" });
-  }
-};
-
-exports.createAppointment = async (req, res) => {
-  try {
-    const {
-      petName,
-      species,
-      breed,
-      notes,
-      size,
-      ownerName,
-      ownerPhone,
-      baseService,
-      extraServices = [],
-      date,
-      time,
-      status = "Pendente",
-    } = req.body;
-
-    const base = await Service.findById(baseService);
-    if (!base) {
-      return res.status(400).json({ message: "Serviço base não encontrado" });
-    }
-
-    const extras = await Service.find({ _id: { $in: extraServices } });
-
-    const total = extras.reduce((acc, e) => acc + e.price, base.price);
-
-    const ownerId = getOwnerId(req.user);
-
-    const appoint = await Appointment.create({
-      petName,
-      species,
-      breed,
-      notes,
-      size,
-      ownerName,
-      ownerPhone,
-      baseService,
-      extraServices,
-      date,
-      time,
-      status,
-      price: total,
-      user: ownerId,
-    });
-
-    const populated = await Appointment.findById(appoint._id)
-      .populate("baseService")
-      .populate("extraServices");
-
-    res.status(201).json(populated);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro ao criar agendamento" });
-  }
-};
-
-exports.getAllAppointments = async (req, res) => {
-  try {
-    const ownerId = getOwnerId(req.user);
-
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
-
-    const [appointments, total] = await Promise.all([
-      Appointment.find({ user: ownerId })
+      return await Appointment.findById(req.appointment._id)
         .populate("baseService")
         .populate("extraServices")
-        .skip(skip)
-        .limit(limit),
-      Appointment.countDocuments({ user: ownerId }),
-    ]);
-
-    res.json({
-      data: appointments,
-      currentPage: page,
-      totalPages: Math.ceil(total / limit),
-      totalItems: total,
+        .session(session);
     });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro ao listar agendamentos" });
-  }
-};
-
-exports.getAppointmentById = async (req, res) => {
-  const ownerId = getOwnerId(req.user);
-  if (req.appointment.user.toString() !== ownerId.toString()) {
-    return res.status(403).json({ message: "Acesso negado ao agendamento." });
-  }
-
-  res.json(req.appointment);
-};
-
-exports.updateAppointment = async (req, res) => {
-  try {
-    const ownerId = getOwnerId(req.user);
-    if (req.appointment.user.toString() !== ownerId.toString()) {
-      return res.status(403).json({ message: "Acesso negado ao agendamento." });
-    }
-
-    Object.assign(req.appointment, req.body);
-
-    if (req.body.baseService || req.body.extraServices) {
-      const base = await Service.findById(req.appointment.baseService);
-      const extras = await Service.find({
-        _id: { $in: req.appointment.extraServices },
-      });
-
-      req.appointment.price =
-        base.price + extras.reduce((acc, e) => acc + e.price, 0);
-    }
-
-    await req.appointment.save();
-
-    const updated = await Appointment.findById(req.appointment._id)
-      .populate("baseService")
-      .populate("extraServices");
 
     res.json(updated);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro ao atualizar agendamento" });
+    console.error("Erro ao atualizar agendamento:", err);
+    res
+      .status(err.status || 500)
+      .json({ message: err.message || "Erro ao atualizar agendamento" });
   }
 };
 
 exports.deleteAppointment = async (req, res) => {
   try {
-    const ownerId = getOwnerId(req.user);
-    if (req.appointment.user.toString() !== ownerId.toString()) {
-      return res.status(403).json({ message: "Acesso negado ao agendamento." });
-    }
+    await withTransaction(async (session) => {
+      if (!req.appointment.user.equals(req.user._id)) {
+        throw { status: 403, message: "Acesso negado ao agendamento." };
+      }
+      await req.appointment.deleteOne({ session });
+    });
 
-    await req.appointment.deleteOne();
     res.json({ message: "Agendamento excluído com sucesso" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro ao excluir agendamento" });
+    console.error("Erro ao excluir agendamento:", err);
+    res
+      .status(err.status || 500)
+      .json({ message: err.message || "Erro ao excluir agendamento" });
   }
 };
 
@@ -305,46 +299,42 @@ exports.uploadAppointments = async (req, res) => {
     if (!req.file)
       return res.status(400).json({ message: "Nenhum arquivo enviado." });
 
-    const ownerId = req.user.id || req.user._id;
+    const fileId = await uploadFileToGridFS(req.file);
+    const ownerId = req.user._id;
 
-    const fileId = req.file.id;
-    const originalName = req.file.originalname;
-
-    console.log("📂 Arquivo enviado para GridFS:");
-    console.log(" - originalname:", originalName);
-    console.log(" - fileId:", fileId);
-
-    const job = await appointmentQueue.add("import", { fileId, ownerId });
-
-    console.log(`🚀 Job ${job.id} criado para importar: ${originalName}`);
+    const job = await appointmentQueue.add("importAppointments", {
+      fileId,
+      ownerId,
+    });
+    console.log(
+      `🚀 Job ${job.id} criado para importar: ${req.file.originalname}`
+    );
 
     res.status(202).json({
       message: "Arquivo recebido e em processamento.",
       jobId: job.id,
-      file: { originalName, fileId },
+      file: { originalName: req.file.originalname, fileId },
     });
   } catch (err) {
-    console.error("❌ Erro no upload:", err);
-    res.status(500).json({ message: "Erro ao enviar arquivo." });
+    console.error("Erro ao enviar arquivo:", err);
+    res.status(500).json({ message: err.message || "Erro ao enviar arquivo." });
   }
 };
 
 exports.getUploadStatus = async (req, res) => {
   try {
-    const { jobId } = req.params;
-    const job = await appointmentQueue.getJob(jobId);
-
-    if (!job) {
-      return res.status(404).json({ message: "Job não encontrado." });
-    }
+    const job = await appointmentQueue.getJob(req.params.jobId);
+    if (!job) return res.status(404).json({ message: "Job não encontrado" });
 
     const state = await job.getState();
     const progress = await job.getProgress();
-    const result = job.returnvalue || null;
+    const reason = job.failedReason || null;
 
-    res.json({ jobId: job.id, state, progress, result });
+    res.json({ jobId: job.id, state, progress, reason });
   } catch (err) {
-    console.error("Erro ao consultar status:", err);
-    res.status(500).json({ message: "Erro ao consultar status." });
+    console.error("Erro ao consultar status do job:", err);
+    res
+      .status(500)
+      .json({ message: err.message || "Erro ao consultar status." });
   }
 };

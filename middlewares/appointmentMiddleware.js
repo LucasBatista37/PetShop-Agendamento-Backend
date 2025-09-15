@@ -9,14 +9,14 @@ module.exports = async (req, res, next) => {
       return res.status(404).json({ message: "Agendamento não encontrado" });
     }
 
-    if (appointment.user.toString() !== req.user._id.toString()) {
+    if (!appointment.user.equals(req.user._id)) {
       return res.status(403).json({ message: "Acesso não autorizado" });
     }
 
     req.appointment = appointment;
     next();
   } catch (err) {
-    console.error(err);
+    console.error("Erro no middleware de agendamento:", err);
     res.status(400).json({ message: "ID de agendamento inválido" });
   }
 };

@@ -9,7 +9,10 @@ module.exports = async (req, res, next) => {
       return res.status(404).json({ message: "Agendamento não encontrado" });
     }
 
-    if (!appointment.user.equals(req.user._id)) {
+    if (
+      !appointment.user.equals(req.user._id) &&
+      !["admin", "collaborator"].includes(req.user.role)
+    ) {
       return res.status(403).json({ message: "Acesso não autorizado" });
     }
 

@@ -53,12 +53,6 @@ exports.getServiceById = async (req, res) => {
 
 exports.updateService = async (req, res) => {
   try {
-    const ownerId = getOwnerId(req.user);
-
-    if (req.service.user.toString() !== ownerId.toString()) {
-      return res.status(403).json({ message: "Acesso negado ao serviço" });
-    }
-
     const { name, description, price, duration, extra } = req.body;
 
     Object.assign(req.service, {
@@ -70,7 +64,6 @@ exports.updateService = async (req, res) => {
     });
 
     const updated = await req.service.save();
-
     res.json(updated);
   } catch (err) {
     console.error(err);
@@ -80,14 +73,7 @@ exports.updateService = async (req, res) => {
 
 exports.deleteService = async (req, res) => {
   try {
-    const ownerId = getOwnerId(req.user);
-
-    if (req.service.user.toString() !== ownerId.toString()) {
-      return res.status(403).json({ message: "Acesso negado ao serviço" });
-    }
-
     await req.service.deleteOne();
-
     res.json({ message: "Serviço excluído com sucesso" });
   } catch (err) {
     console.error(err);

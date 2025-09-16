@@ -22,6 +22,6 @@ exports.validateAcceptInvite = [
       minSymbols: 0,
     })
     .withMessage(
-      "A nova senha deve ter pelo menos 8 caracteres, incluindo letras maiúsculas, minúsculas e números"
+      "A senha deve ter pelo menos 8 caracteres, incluindo letras maiúsculas, minúsculas e números"
     ),
 ];

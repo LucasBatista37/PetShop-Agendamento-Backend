@@ -32,6 +32,7 @@ router.get("/", getAllAppointments);
 router.put("/sort-preference", updateSortPreference);
 
 router.get("/:id", appointmentMiddleware, getAppointmentById);
+
 router.put(
   "/:id",
   appointmentMiddleware,
@@ -43,6 +44,7 @@ router.put(
 router.delete("/:id", appointmentMiddleware, deleteAppointment);
 
 router.post("/upload", upload.single("file"), uploadAppointments);
+
 router.get("/upload/status/:jobId", getUploadStatus);
 
 module.exports = router;

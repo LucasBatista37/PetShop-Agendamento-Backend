@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const upload = require("../middlewares/upload");
+const upload = require("../scripts/upload");
 const authMiddleware = require("../middlewares/authMiddleware");
 const appointmentMiddleware = require("../middlewares/appointmentMiddleware");
 const {
@@ -14,8 +14,6 @@ const {
   getAppointmentById,
   updateAppointment,
   deleteAppointment,
-  uploadAppointments,
-  getUploadStatus,
   updateSortPreference
 } = require("../controllers/appointmentController");
 
@@ -32,6 +30,7 @@ router.get("/", getAllAppointments);
 router.put("/sort-preference", updateSortPreference);
 
 router.get("/:id", appointmentMiddleware, getAppointmentById);
+
 router.put(
   "/:id",
   appointmentMiddleware,
@@ -41,8 +40,5 @@ router.put(
 );
 
 router.delete("/:id", appointmentMiddleware, deleteAppointment);
-
-router.post("/upload", upload.single("file"), uploadAppointments);
-router.get("/upload/status/:jobId", getUploadStatus);
 
 module.exports = router;

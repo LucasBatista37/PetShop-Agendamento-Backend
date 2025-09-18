@@ -1,52 +1,69 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
-const JWT_SECRET = process.env.JWT_SECRET;
-const REFRESH_SECRET = process.env.REFRESH_SECRET;
-
 module.exports = async (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
-
-  if (!token) {
-    return res.status(401).json({ message: "Token não fornecido" });
-  }
-
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.userId);
-    if (!user) return res.status(401).json({ message: "Usuário não encontrado" });
+    const authHeader = req.headers.authorization;
+    const accessToken = authHeader?.startsWith("Bearer ")
+      ? authHeader.split(" ")[1]
+      : null;
 
-    req.user = user;
-    return next();
-  } catch (err) {
-    if (err.name === "TokenExpiredError") {
-      const refreshToken = req.cookies?.refreshToken;
-      if (!refreshToken) return res.status(401).json({ message: "Refresh token não fornecido" });
-
-      try {
-        const decodedRefresh = jwt.verify(refreshToken, REFRESH_SECRET);
-        const user = await User.findById(decodedRefresh.userId);
-
-        if (!user || user.refreshToken !== refreshToken) {
-          return res.status(403).json({ message: "Refresh token inválido" });
-        }
-
-        const newAccessToken = jwt.sign({ userId: user._id }, JWT_SECRET, {
-          expiresIn: "15m",
-        });
-
-        res.setHeader("x-access-token", newAccessToken);
-
-        req.user = user;
-        return next();
-      } catch (refreshErr) {
-        console.error("Erro no refreshToken:", refreshErr);
-        return res.status(403).json({ message: "Refresh token inválido ou expirado" });
-      } 
+    if (!accessToken) {
+      return res.status(401).json({ message: "Token de acesso não fornecido" });
     }
 
-    console.error("Erro na autenticação:", err);
-    return res.status(401).json({ message: "Token inválido" });
+    try {
+      const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
+      const user = await User.findById(decoded.userId);
+      if (!user)
+        return res.status(401).json({ message: "Usuário não encontrado" });
+
+      req.user = user;
+      return next();
+    } catch (err) {
+      if (err.name === "TokenExpiredError") {
+        console.log("AccessToken expirado, tentando refreshToken...");
+        const refreshToken = req.cookies?.refreshToken;
+        console.log("RefreshToken no cookie (middleware):", refreshToken);
+
+        if (!refreshToken)
+          return res
+            .status(401)
+            .json({ message: "Refresh token não fornecido" });
+
+        try {
+          const decodedRefresh = jwt.verify(
+            refreshToken,
+            process.env.REFRESH_SECRET
+          );
+          const user = await User.findById(decodedRefresh.userId);
+          if (!user || user.refreshToken !== refreshToken) {
+            return res.status(403).json({ message: "Refresh token inválido" });
+          }
+
+          const newAccessToken = jwt.sign(
+            { userId: user._id },
+            process.env.JWT_SECRET,
+            { expiresIn: "15m" }
+          );
+          res.setHeader("x-access-token", newAccessToken);
+          req.user = user;
+          return next();
+        } catch (refreshErr) {
+          console.error("Erro no refreshToken:", refreshErr);
+          return res
+            .status(403)
+            .json({ message: "Refresh token inválido ou expirado" });
+        }
+      } else {
+        console.error("Erro na autenticação:", err);
+        return res.status(401).json({ message: "Token inválido" });
+      }
+    }
+  } catch (e) {
+    console.error("Erro middleware auth:", e);
+    return res
+      .status(500)
+      .json({ message: "Erro no middleware de autenticação" });
   }
 };

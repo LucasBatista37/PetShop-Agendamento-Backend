@@ -13,6 +13,8 @@
   "description": "",
   "dependencies": {
     "@sentry/node": "^7.120.3",
+    "axios": "^1.12.2",
+    "axios-cookiejar-support": "^6.0.4",
     "bcryptjs": "^3.0.2",
     "bullmq": "^5.58.5",
     "cookie-parser": "^1.4.7",
@@ -32,6 +34,7 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^7.0.6",
     "stripe": "^18.5.0",
+    "tough-cookie": "^5.1.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

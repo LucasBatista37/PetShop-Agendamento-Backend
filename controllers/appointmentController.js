@@ -2,16 +2,9 @@ const mongoose = require("mongoose");
 const Appointment = require("../models/Appointment");
 const Service = require("../models/Service");
 const getOwnerId = require("../utils/getOwnerId");
-const { Queue } = require("bullmq");
-const { redisConnection } = require("../utils/redis");
 const { parseISO, isBefore } = require("date-fns");
-const { uploadFileToGridFS } = require("../utils/gridfs");
 const User = require("../models/User");
 const { withTransaction } = require("../utils/withTransaction");
-
-const appointmentQueue = new Queue("appointments", {
-  connection: redisConnection,
-});
 
 const VALID_STATUSES = ["Pendente", "Confirmado", "Cancelado", "Finalizado"];
 
@@ -300,50 +293,5 @@ exports.updateSortPreference = async (req, res) => {
   } catch (err) {
     console.error("Erro ao atualizar preferência:", err);
     res.status(500).json({ message: "Erro ao atualizar preferência" });
-  }
-};
-
-exports.uploadAppointments = async (req, res) => {
-  try {
-    if (!req.file)
-      return res.status(400).json({ message: "Nenhum arquivo enviado." });
-
-    const fileId = await uploadFileToGridFS(req.file);
-    const ownerId = req.user._id;
-
-    const job = await appointmentQueue.add("importAppointments", {
-      fileId,
-      ownerId,
-    });
-    console.log(
-      `🚀 Job ${job.id} criado para importar: ${req.file.originalname}`
-    );
-
-    res.status(202).json({
-      message: "Arquivo recebido e em processamento.",
-      jobId: job.id,
-      file: { originalName: req.file.originalname, fileId },
-    });
-  } catch (err) {
-    console.error("Erro ao enviar arquivo:", err);
-    res.status(500).json({ message: err.message || "Erro ao enviar arquivo." });
-  }
-};
-
-exports.getUploadStatus = async (req, res) => {
-  try {
-    const job = await appointmentQueue.getJob(req.params.jobId);
-    if (!job) return res.status(404).json({ message: "Job não encontrado" });
-
-    const state = await job.getState();
-    const progress = await job.getProgress();
-    const reason = job.failedReason || null;
-
-    res.json({ jobId: job.id, state, progress, reason });
-  } catch (err) {
-    console.error("Erro ao consultar status do job:", err);
-    res
-      .status(500)
-      .json({ message: err.message || "Erro ao consultar status." });
   }
 };

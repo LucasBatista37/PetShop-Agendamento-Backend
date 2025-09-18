@@ -103,8 +103,6 @@ exports.register = async (req, res) => {
         : null,
     };
 
-    console.log("Stripe subscription returned:", subscription);
-
     await user.save();
 
     const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${emailToken}&email=${email}`;
@@ -121,8 +119,6 @@ exports.register = async (req, res) => {
         "Cadastro realizado com sucesso. Você ganhou 30 dias grátis! Verifique seu e-mail para ativar sua conta.",
     });
   } catch (err) {
-    console.error("[REGISTER] Erro:", err);
-
     if (err.type === "StripeCardError" || err.type?.includes("Stripe")) {
       return res.status(400).json({ message: "Erro ao processar no Stripe." });
     }
@@ -206,7 +202,7 @@ exports.login = async (req, res) => {
 
     return res.json({
       accessToken,
-      ...(NODE_ENV !== "production" && { refreshToken }), 
+      ...(NODE_ENV !== "production" && { refreshToken }),
       user: {
         id: user._id,
         name: user.name,
@@ -215,7 +211,6 @@ exports.login = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("[LOGIN] Erro:", err);
     return res.status(500).json({ message: "Erro no servidor" });
   }
 };
@@ -247,7 +242,6 @@ exports.refreshToken = async (req, res) => {
       ...(NODE_ENV !== "production" && { refreshToken: newRefreshToken }),
     });
   } catch (err) {
-    console.error("[REFRESH] Erro ao renovar token:", err);
     return res
       .status(403)
       .json({ message: "Refresh token inválido ou expirado" });
@@ -262,7 +256,6 @@ exports.getProfile = async (req, res) => {
     }
     return res.json({ user });
   } catch (err) {
-    console.error("[PROFILE] Erro ao buscar perfil:", err);
     return res.status(500).json({ message: "Erro ao buscar perfil" });
   }
 };

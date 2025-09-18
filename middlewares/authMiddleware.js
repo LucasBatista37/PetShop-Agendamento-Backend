@@ -3,9 +3,6 @@ const User = require("../models/User");
 
 module.exports = async (req, res, next) => {
   try {
-    console.log("headers.cookie:", req.headers.cookie);
-    console.log("req.cookies:", req.cookies);
-
     const authHeader = req.headers.authorization;
     const accessToken = authHeader?.startsWith("Bearer ")
       ? authHeader.split(" ")[1]

@@ -6,17 +6,33 @@ const { checkTrialEndingUsers } = require("./jobs/sendTrialEndingEmails");
 
 const PORT = process.env.PORT || 5000;
 
-connectDB().then(async () => {
-  app.listen(PORT, () => {
-    console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
-  });
+(async () => {
+  try {
+    await connectDB();
 
-  await startWorker();
+    app.listen(PORT, () => {
+      console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+    });
 
-  await checkTrialEndingUsers();
+    startWorker()
+      .then(() => console.log("✅ Worker de agendamentos iniciado"))
+      .catch((err) => console.error("❌ Erro ao iniciar worker:", err));
 
-  setInterval(async () => {
-    await checkTrialEndingUsers();
-    console.log("Teste finalizado!");
-  }, 24 * 60 * 60 * 1000);
-});
+    checkTrialEndingUsers()
+      .then(() => console.log("📨 Verificação de trials executada na inicialização"))
+      .catch((err) => console.error("❌ Erro ao verificar trials:", err));
+
+    setInterval(async () => {
+      try {
+        await checkTrialEndingUsers();
+        console.log("📨 Verificação diária de trials concluída");
+      } catch (err) {
+        console.error("❌ Erro ao executar verificação diária de trials:", err);
+      }
+    }, 24 * 60 * 60 * 1000);
+
+  } catch (err) {
+    console.error("❌ Erro ao iniciar servidor:", err);
+    process.exit(1); 
+  }
+})();

@@ -1,13 +1,14 @@
 const express = require("express");
 const cors = require("cors");
 const Sentry = require("@sentry/node");
+const cookieParser = require("cookie-parser");
 
 const authRoutes = require("./routes/auth.routes");
 const serviceRoutes = require("./routes/service.routes");
 const indexRoutes = require("./routes/index.routes");
 const appointmentRoutes = require("./routes/appointment.routes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
-const colaboratorRoutes = require("./routes/collaborator");
+const collaboratorRoutes = require("./routes/collaborator");
 const supportRoutes = require("./routes/support.routes.js");
 const stripeRoutes = require("./routes/stripe.routes");
 const stripeWebhook = require("./routes/stripe.webhook");
@@ -19,6 +20,7 @@ app.use(Sentry.Handlers.requestHandler());
 app.use(Sentry.Handlers.tracingHandler());
 
 app.set("trust proxy", 1);
+app.use(cookieParser());
 
 const allowedOrigins = [
   "http://localhost:5173",
@@ -48,7 +50,7 @@ app.use("/api/services", serviceRoutes);
 app.use("/api", indexRoutes);
 app.use("/api/appointments", appointmentRoutes);
 app.use("/api/dashboard", dashboardRoutes);
-app.use("/api/collaborators", colaboratorRoutes);
+app.use("/api/collaborators", collaboratorRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/stripe", stripeRoutes);
 
@@ -59,15 +61,15 @@ app.get("/", (req, res) => {
 app.use(Sentry.Handlers.errorHandler());
 
 if (!process.env.JWT_SECRET) {
-  throw new Error("JWT_SECRET não está definido!");
+  throw new Error("❌ JWT_SECRET não está definido!");
 }
 
 if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY não está definido!");
+  throw new Error("❌ STRIPE_SECRET_KEY não está definido!");
 }
 
 if (!process.env.STRIPE_WEBHOOK_SECRET) {
-  throw new Error("STRIPE_WEBHOOK_SECRET não está definido!");
+  throw new Error("❌ STRIPE_WEBHOOK_SECRET não está definido!");
 }
 
 module.exports = app;

@@ -9,9 +9,11 @@ const { createUser } = require("../services/userService");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const JWT_SECRET = process.env.JWT_SECRET;
+const REFRESH_SECRET = process.env.REFRESH_SECRET;
 const EMAIL_USER = process.env.EMAIL_USER;
 const BASE_URL = process.env.BASE_URL;
 const CLIENT_URL = process.env.CLIENT_URL;
+const NODE_ENV = process.env.NODE_ENV || "development";
 
 if (!JWT_SECRET) throw new Error("Variável JWT_SECRET não definida");
 if (!EMAIL_USER) throw new Error("Variável EMAIL_USER não definida");
@@ -36,6 +38,21 @@ const mapStripeStatusToEnum = (subscription) => {
     default:
       return "inactive";
   }
+};
+
+const generateAccessToken = (userId) => {
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "15m" });
+};
+
+const generateRefreshToken = (userId) => {
+  return jwt.sign({ userId }, REFRESH_SECRET, { expiresIn: "30d" });
+};
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: NODE_ENV === "production",
+  sameSite: NODE_ENV === "production" ? "None" : "Lax",
+  maxAge: 30 * 24 * 60 * 60 * 1000,
 };
 
 exports.register = async (req, res) => {
@@ -74,7 +91,7 @@ exports.register = async (req, res) => {
     user.subscription = {
       stripeCustomerId: customer.id,
       stripeSubscriptionId: subscription.id,
-      status: mapStripeStatusToEnum(subscription), 
+      status: mapStripeStatusToEnum(subscription),
       currentPeriodStart: subscription.current_period_start
         ? new Date(subscription.current_period_start * 1000)
         : null,
@@ -168,53 +185,72 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-
     if (!user || !user.password) {
       return res.status(400).json({ message: "Credenciais inválidas." });
     }
 
     const validCredentials = await bcrypt.compare(password, user.password);
-
     if (!validCredentials || !user.isVerified) {
       return res
         .status(400)
         .json({ message: "Credenciais inválidas ou e-mail não verificado." });
     }
 
-    const accessToken = jwt.sign({ userId: user._id }, JWT_SECRET, {
-      expiresIn: "15m",
-    });
-
-    const refreshToken = jwt.sign(
-      { userId: user._id },
-      process.env.REFRESH_SECRET,
-      {
-        expiresIn: "30d",
-      }
-    );
+    const accessToken = generateAccessToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
 
     user.refreshToken = refreshToken;
     await user.save();
 
-    res
-      .cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "Strict",
-        maxAge: 30 * 24 * 60 * 60 * 1000,
-      })
-      .json({
-        accessToken,
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-        },
-      });
+    res.cookie("refreshToken", refreshToken, cookieOptions);
+
+    return res.json({
+      accessToken,
+      ...(NODE_ENV !== "production" && { refreshToken }), 
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+      },
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro no servidor" });
+    console.error("[LOGIN] Erro:", err);
+    return res.status(500).json({ message: "Erro no servidor" });
+  }
+};
+
+exports.refreshToken = async (req, res) => {
+  try {
+    const token = req.cookies?.refreshToken;
+    if (!token) {
+      return res.status(401).json({ message: "Refresh token não fornecido" });
+    }
+
+    const decoded = jwt.verify(token, REFRESH_SECRET);
+    const user = await User.findById(decoded.userId);
+
+    if (!user || user.refreshToken !== token) {
+      return res.status(403).json({ message: "Refresh token inválido" });
+    }
+
+    const newRefreshToken = generateRefreshToken(user._id);
+    user.refreshToken = newRefreshToken;
+    await user.save();
+
+    res.cookie("refreshToken", newRefreshToken, cookieOptions);
+
+    const newAccessToken = generateAccessToken(user._id);
+
+    return res.json({
+      accessToken: newAccessToken,
+      ...(NODE_ENV !== "production" && { refreshToken: newRefreshToken }),
+    });
+  } catch (err) {
+    console.error("[REFRESH] Erro ao renovar token:", err);
+    return res
+      .status(403)
+      .json({ message: "Refresh token inválido ou expirado" });
   }
 };
 
@@ -224,10 +260,10 @@ exports.getProfile = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: "Usuário não encontrado" });
     }
-    res.json({ user });
+    return res.json({ user });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro ao buscar perfil" });
+    console.error("[PROFILE] Erro ao buscar perfil:", err);
+    return res.status(500).json({ message: "Erro ao buscar perfil" });
   }
 };
 
@@ -340,26 +376,6 @@ exports.resetPassword = async (req, res) => {
   await user.save();
 
   res.json({ message: "Senha redefinida com sucesso." });
-};
-
-exports.refreshToken = async (req, res) => {
-  const token = req.cookies.refreshToken;
-  if (!token) return res.sendStatus(401);
-
-  try {
-    const decoded = jwt.verify(token, process.env.REFRESH_SECRET);
-    const user = await User.findById(decoded.userId);
-    if (!user || user.refreshToken !== token) return res.sendStatus(403);
-
-    const newAccessToken = jwt.sign({ userId: user._id }, JWT_SECRET, {
-      expiresIn: "1m",
-    });
-
-    res.json({ accessToken: newAccessToken });
-  } catch (err) {
-    console.error("Erro ao renovar token:", err);
-    res.sendStatus(403);
-  }
 };
 
 exports.logout = async (req, res) => {

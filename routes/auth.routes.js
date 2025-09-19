@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middlewares/authMiddleware");
 const rateLimit = require("express-rate-limit");
+const emailCooldown = require("../middlewares/emailCooldown");
 const {
   validateRegister,
   validateChangePassword,
@@ -32,7 +33,7 @@ const loginLimiter = rateLimit({
 
 router.post("/register", validateRegister, register);
 router.get("/verify-email", verifyEmail);
-router.post("/resend-verification", resendVerificationEmail);
+router.post("/resend-verification", emailCooldown, resendVerificationEmail);
 router.post("/login", loginLimiter, login);
 router.post("/refresh", authMiddleware, refreshToken);
 router.post("/logout", authMiddleware, logout);

@@ -41,7 +41,7 @@ const mapStripeStatusToEnum = (subscription) => {
 };
 
 const generateAccessToken = (userId) => {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "15m" });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "10s" });
 };
 
 const generateRefreshToken = (userId) => {
@@ -150,28 +150,33 @@ exports.verifyEmail = async (req, res) => {
 exports.resendVerificationEmail = async (req, res) => {
   try {
     const { email } = req.body;
-    const user = await User.findOne({ email });
 
-    if (!user)
+    const user = await User.findOne({ email });
+    if (!user) {
       return res.status(404).json({ message: "Usuário não encontrado" });
-    if (user.isVerified)
+    }
+
+    if (user.isVerified) {
       return res.status(400).json({ message: "E-mail já foi verificado" });
+    }
 
     user.emailToken = crypto.randomBytes(32).toString("hex");
     await user.save();
 
     const verifyUrl = `${BASE_URL}/api/auth/verify-email?token=${user.emailToken}&email=${user.email}`;
 
-    await transporter.sendMail({
+    const mailOptions = {
       from: `"PetCare" <${EMAIL_USER}>`,
       to: email,
       subject: "Reenvio: Confirme seu e-mail no PetCare",
       html: generateVerificationEmail(user.name, verifyUrl),
-    });
+    };
+
+    await transporter.sendMail(mailOptions);
 
     res.json({ message: "E-mail de confirmação reenviado com sucesso." });
+
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Erro ao reenviar e-mail de verificação" });
   }
 };

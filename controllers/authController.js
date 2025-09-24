@@ -41,7 +41,7 @@ const mapStripeStatusToEnum = (subscription) => {
 };
 
 const generateAccessToken = (userId) => {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "10s" });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "15m" });
 };
 
 const generateRefreshToken = (userId) => {
@@ -238,7 +238,6 @@ exports.refreshToken = async (req, res) => {
       return res.status(403).json({ message: "Refresh token inválido" });
     }
 
-    // 🔧 Se quiser testar expiração sem rotação, use ENV
     const ROTATE_REFRESH = process.env.ROTATE_REFRESH !== "false";
 
     let newRefreshToken = token;

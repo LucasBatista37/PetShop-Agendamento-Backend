@@ -26,18 +26,15 @@ function validateAppointmentInput(body) {
     return "Status inválido.";
   }
 
-  const appointmentDate = parseISO(`${date}T${time}`);
-  if (isBefore(appointmentDate, new Date())) {
-    return "Data e hora do agendamento devem ser futuras.";
-  }
-
   return null;
 }
 
 exports.createAppointment = async (req, res) => {
   const validationError = validateAppointmentInput(req.body);
-  if (validationError)
+  if (validationError) {
+    console.log("Validação falhou:", validationError);
     return res.status(400).json({ message: validationError });
+  }
 
   try {
     const populated = await withTransaction(async (session) => {
@@ -57,11 +54,14 @@ exports.createAppointment = async (req, res) => {
       } = req.body;
 
       const base = await Service.findById(baseService).session(session);
-      if (!base) throw new Error("Serviço base não encontrado.");
+      if (!base) {
+        throw new Error("Serviço base não encontrado.");
+      }
 
       const extras = await Service.find({
         _id: { $in: extraServices },
       }).session(session);
+
       const total =
         base.price + extras.reduce((acc, e) => acc + (e.price || 0), 0);
 
@@ -97,7 +97,6 @@ exports.createAppointment = async (req, res) => {
 
     res.status(201).json(populated);
   } catch (err) {
-    console.error("Erro ao criar agendamento:", err);
     res
       .status(500)
       .json({ message: err.message || "Erro ao criar agendamento" });

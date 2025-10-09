@@ -22,9 +22,7 @@ module.exports = async (req, res, next) => {
       return next();
     } catch (err) {
       if (err.name === "TokenExpiredError") {
-        console.log("AccessToken expirado, tentando refreshToken...");
         const refreshToken = req.cookies?.refreshToken;
-        console.log("RefreshToken no cookie (middleware):", refreshToken);
 
         if (!refreshToken)
           return res

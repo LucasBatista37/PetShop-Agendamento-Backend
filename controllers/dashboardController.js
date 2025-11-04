@@ -1,6 +1,11 @@
 const Appointment = require("../models/Appointment");
-const { startOfDay, addDays, format } = require("date-fns");
-const { startOfMonth, endOfMonth } = require("date-fns");
+const {
+  startOfDay,
+  addDays,
+  format,
+  startOfMonth,
+  endOfMonth,
+} = require("date-fns");
 const getOwnerId = require("../utils/getOwnerId");
 
 const norm = (s) =>
@@ -21,6 +26,7 @@ const normalizeStatus = (raw) => {
 
 const parseMonthParam = (m) => {
   if (m == null) return null;
+  if (m === "all") return "all";
   const n = Number(m);
   if (Number.isNaN(n)) return null;
   if (n >= 1 && n <= 12) return n - 1;
@@ -37,8 +43,16 @@ exports.getStats = async (req, res) => {
 
     let dateFilter = {};
     let hasMonthFilter = false;
+    let isAllPeriod = false;
 
-    if (monthParam != null && yearParam != null && !Number.isNaN(yearParam)) {
+    if (monthParam === "all") {
+      // Novo caso: todo o período (sem filtro de data)
+      isAllPeriod = true;
+    } else if (
+      monthParam != null &&
+      yearParam != null &&
+      !Number.isNaN(yearParam)
+    ) {
       const start = startOfMonth(new Date(yearParam, monthParam, 1));
       const end = endOfMonth(start);
       dateFilter = {
@@ -51,13 +65,19 @@ exports.getStats = async (req, res) => {
     }
 
     const baseQuery = { user: ownerId };
-    const allAppointments = await Appointment.find(baseQuery)
-      .populate("baseService")
-      .populate("extraServices");
+    let metricsSource = [];
 
-    let metricsSource = allAppointments;
-    if (hasMonthFilter) {
+    if (isAllPeriod) {
+      // Busca todos os agendamentos sem filtro de data
+      metricsSource = await Appointment.find(baseQuery)
+        .populate("baseService")
+        .populate("extraServices");
+    } else if (hasMonthFilter) {
       metricsSource = await Appointment.find({ ...baseQuery, ...dateFilter })
+        .populate("baseService")
+        .populate("extraServices");
+    } else {
+      metricsSource = await Appointment.find(baseQuery)
         .populate("baseService")
         .populate("extraServices");
     }
@@ -67,6 +87,20 @@ exports.getStats = async (req, res) => {
         a.extraServices?.reduce((acc, e) => acc + (e.price || 0), 0) || 0;
       return sum + (a.baseService?.price || 0) + extrasPrice;
     }, 0);
+
+    const revenueMap = {};
+    metricsSource.forEach((a) => {
+      const baseName = a.baseService?.name || "Desconhecido";
+      const basePrice = a.baseService?.price || 0;
+      const extrasPrice =
+        a.extraServices?.reduce((acc, e) => acc + (e.price || 0), 0) || 0;
+      const total = basePrice + extrasPrice;
+      revenueMap[baseName] = (revenueMap[baseName] || 0) + total;
+    });
+
+    const revenueByService = Object.entries(revenueMap).map(
+      ([service, total]) => ({ service, total })
+    );
 
     const statusMap = {
       Concluído: 0,
@@ -101,6 +135,7 @@ exports.getStats = async (req, res) => {
       hour,
       count,
     }));
+
     const peakHourData = byHour.reduce(
       (prev, curr) => (curr.count > prev.count ? curr : prev),
       { hour: null, count: 0 }
@@ -157,12 +192,14 @@ exports.getStats = async (req, res) => {
       peakHour,
       statusCounts,
       services,
+      revenueByService,
       last7Days,
       byDayInMonth,
-      appliedFilter: hasMonthFilter
+      appliedFilter: isAllPeriod
+        ? { all: true }
+        : hasMonthFilter
         ? { month0: monthParam, year: yearParam }
         : null,
-      allAppointments,
     });
   } catch (err) {
     console.error(err);

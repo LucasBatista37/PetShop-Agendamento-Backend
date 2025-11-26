@@ -70,17 +70,26 @@ exports.getStats = async (req, res) => {
     if (isAllPeriod) {
       // Busca todos os agendamentos sem filtro de data
       metricsSource = await Appointment.find(baseQuery)
+        .sort({ date: 1, time: 1 })
         .populate("baseService")
         .populate("extraServices");
     } else if (hasMonthFilter) {
       metricsSource = await Appointment.find({ ...baseQuery, ...dateFilter })
+        .sort({ date: 1, time: 1 })
         .populate("baseService")
         .populate("extraServices");
     } else {
       metricsSource = await Appointment.find(baseQuery)
+        .sort({ date: 1, time: 1 })
         .populate("baseService")
         .populate("extraServices");
     }
+
+    // Busca todos os agendamentos para o calendário (sem filtro de mês)
+    const calendarAppointments = await Appointment.find(baseQuery)
+      .sort({ date: 1, time: 1 })
+      .populate("baseService")
+      .populate("extraServices");
 
     const totalRevenue = metricsSource.reduce((sum, a) => {
       const extrasPrice =
@@ -159,9 +168,14 @@ exports.getStats = async (req, res) => {
       const d = addDays(end7, -i);
       const dStart = startOfDay(d);
       const dEnd = addDays(dStart, 1);
-      const count = metricsSource.filter(
-        (a) => a.date && new Date(a.date) >= dStart && new Date(a.date) < dEnd
-      ).length;
+      const count = metricsSource.filter((a) => {
+        if (!a.date) return false;
+        // Parse the date string as local date to avoid timezone shift
+        const apptDate = new Date(a.date);
+        const apptDay = new Date(apptDate.getFullYear(), apptDate.getMonth(), apptDate.getDate());
+        const compareDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        return apptDay.getTime() === compareDay.getTime();
+      }).length;
       daysCount.push({ date: format(dStart, "dd/MM"), count });
     }
     const last7Days = daysCount;
@@ -195,6 +209,8 @@ exports.getStats = async (req, res) => {
       revenueByService,
       last7Days,
       byDayInMonth,
+      allAppointments: metricsSource,
+      calendarAppointments,
       appliedFilter: isAllPeriod
         ? { all: true }
         : hasMonthFilter

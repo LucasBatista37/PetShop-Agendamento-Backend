@@ -7,6 +7,7 @@ const serviceSchema = new mongoose.Schema(
     price: { type: Number, required: true },
     duration: { type: Number, required: true },
     extra: { type: Boolean, default: false },
+    order: { type: Number, default: 0 },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

@@ -32,6 +32,7 @@ router.post(
   controller.inviteCollaborator
 );
 router.get("/", controller.getAllCollaborators);
+router.put("/:id", controller.updateCollaborator);
 router.delete("/:id", controller.deleteCollaborator);
 
 module.exports = router;

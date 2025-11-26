@@ -129,13 +129,47 @@ exports.getAllCollaborators = async (req, res) => {
   }
 };
 
+exports.updateCollaborator = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { department, phone, role } = req.body;
+
+    const collaborator = await User.findOne({
+      _id: id,
+      owner: req.user._id,
+    });
+
+    if (!collaborator) {
+      return res.status(404).json({ message: "Colaborador não encontrado." });
+    }
+
+    if (department !== undefined) collaborator.department = department;
+    if (phone !== undefined) collaborator.phone = phone;
+    if (role !== undefined && (role === "admin" || role === "collaborator")) {
+      collaborator.role = role;
+    }
+
+    await collaborator.save();
+
+    const updated = collaborator.toObject();
+    delete updated.password;
+
+    res.json({ 
+      message: "Colaborador atualizado com sucesso.",
+      collaborator: updated
+    });
+  } catch (err) {
+    console.error("Erro ao atualizar colaborador:", err);
+    res.status(500).json({ message: "Erro ao atualizar colaborador." });
+  }
+};
+
 exports.deleteCollaborator = async (req, res) => {
   try {
     const { id } = req.params;
 
     const collaborator = await User.findOneAndDelete({
       _id: id,
-      role: "collaborator",
       owner: req.user._id,
     });
 

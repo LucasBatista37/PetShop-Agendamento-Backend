@@ -31,6 +31,7 @@ router.post(
   runValidation,
   controller.inviteCollaborator
 );
+router.post("/reorder", controller.reorderCollaborators);
 router.get("/", controller.getAllCollaborators);
 router.put("/:id", controller.updateCollaborator);
 router.delete("/:id", controller.deleteCollaborator);

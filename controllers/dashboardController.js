@@ -170,13 +170,22 @@ exports.getStats = async (req, res) => {
       const dEnd = addDays(dStart, 1);
       const count = metricsSource.filter((a) => {
         if (!a.date) return false;
-        // Parse the date string as local date to avoid timezone shift
+        // MongoDB stores dates as UTC, so we need to compare using UTC components
         const apptDate = new Date(a.date);
-        const apptDay = new Date(apptDate.getFullYear(), apptDate.getMonth(), apptDate.getDate());
-        const compareDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-        return apptDay.getTime() === compareDay.getTime();
+        
+        // Get UTC components from MongoDB date
+        const apptYear = apptDate.getUTCFullYear();
+        const apptMonth = apptDate.getUTCMonth();
+        const apptDay = apptDate.getUTCDate();
+        
+        // Get local components from our comparison date
+        const targetYear = d.getFullYear();
+        const targetMonth = d.getMonth();
+        const targetDay = d.getDate();
+        
+        return apptYear === targetYear && apptMonth === targetMonth && apptDay === targetDay;
       }).length;
-      daysCount.push({ date: format(dStart, "dd/MM"), count });
+      daysCount.push({ date: format(d, "dd/MM"), count });
     }
     const last7Days = daysCount;
 

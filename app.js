@@ -53,6 +53,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/collaborators", collaboratorRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/stripe", stripeRoutes);
+app.use("/api/notifications", require("./routes/notificationRoutes"));
 
 app.get("/", (req, res) => {
   res.send("🚀 API do PetShop SaaS está no ar!");

@@ -89,6 +89,16 @@ exports.createAppointment = async (req, res) => {
         { session }
       );
 
+      // Create notification
+      const Notification = require("../models/Notification");
+      await Notification.create([{
+        recipient: ownerId,
+        type: 'success',
+        message: `Novo agendamento criado para ${petName} em ${date} às ${time}`,
+        relatedId: appoint[0]._id,
+        onModel: 'Appointment'
+      }], { session });
+
       return await Appointment.findById(appoint[0]._id)
         .populate("baseService")
         .populate("extraServices")
@@ -221,6 +231,16 @@ exports.updateAppointment = async (req, res) => {
       }
 
       await appointment.save({ session });
+
+      // Create notification for update
+      const Notification = require("../models/Notification");
+      await Notification.create([{
+        recipient: ownerId,
+        type: 'info',
+        message: `Agendamento de ${appointment.petName} atualizado para ${appointment.status}`,
+        relatedId: appointment._id,
+        onModel: 'Appointment'
+      }], { session });
 
       return await Appointment.findById(appointment._id)
         .populate("baseService")

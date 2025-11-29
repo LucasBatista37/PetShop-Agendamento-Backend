@@ -15,15 +15,17 @@ exports.createPet = async (req, res) => {
 exports.getAllPets = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
-    const { page = 1, limit = 10, search = "", clientId } = req.query;
+    const { page = 1, limit = 10, search = "", clientId, species, size } = req.query;
 
     const query = { user: ownerId };
     if (clientId) query.client = clientId;
+    if (species) query.species = species;
+    if (size) query.size = size;
+    
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { breed: { $regex: search, $options: "i" } },
-        { species: { $regex: search, $options: "i" } },
       ];
     }
 

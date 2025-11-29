@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Appointment = require("../models/Appointment");
 const Service = require("../models/Service");
+const Transaction = require("../models/Transaction");
 const getOwnerId = require("../utils/getOwnerId");
 const { parseISO, isBefore } = require("date-fns");
 const User = require("../models/User");
@@ -213,6 +214,7 @@ exports.updateAppointment = async (req, res) => {
         throw { status: 403, message: "Acesso negado ao agendamento." };
       }
 
+      const oldStatus = appointment.status; // Capture old status
       Object.assign(appointment, req.body);
 
       if (req.body.baseService || req.body.extraServices) {
@@ -241,6 +243,22 @@ exports.updateAppointment = async (req, res) => {
         relatedId: appointment._id,
         onModel: 'Appointment'
       }], { session });
+
+      // Auto-create transaction if status changed to "Finalizado"
+      if (req.body.status === "Finalizado" && oldStatus !== "Finalizado") {
+          // Transaction model is already required at the top
+          await Transaction.create([{
+              description: `Serviço: ${appointment.petName} - ${appointment.ownerName}`,
+              amount: appointment.price || 0,
+              type: "income",
+              category: "Serviço",
+              date: new Date(),
+              status: "pending", // Pending confirmation
+              paymentMethod: "cash", // Default, user can change on confirmation
+              relatedAppointment: appointment._id,
+              user: ownerId
+          }], { session });
+      }
 
       return await Appointment.findById(appointment._id)
         .populate("baseService")

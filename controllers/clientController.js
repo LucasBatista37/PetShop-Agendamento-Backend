@@ -15,7 +15,7 @@ exports.createClient = async (req, res) => {
 exports.getAllClients = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
-    const { page = 1, limit = 10, search = "" } = req.query;
+    const { page = 1, limit = 10, search = "", sortBy = "order" } = req.query;
 
     const query = { user: ownerId };
     if (search) {
@@ -26,8 +26,12 @@ exports.getAllClients = async (req, res) => {
       ];
     }
 
+    let sort = { order: 1, createdAt: -1 };
+    if (sortBy === "name") sort = { name: 1 };
+    if (sortBy === "date") sort = { createdAt: -1 };
+
     const clients = await Client.find(query)
-      .sort({ order: 1, createdAt: -1 })
+      .sort(sort)
       .skip((page - 1) * limit)
       .limit(Number(limit));
 

@@ -52,6 +52,7 @@ exports.createAppointment = async (req, res) => {
         date,
         time,
         status = "Pendente",
+        responsible,
       } = req.body;
 
       const base = await Service.findById(baseService).session(session);
@@ -85,6 +86,7 @@ exports.createAppointment = async (req, res) => {
             status,
             price: total,
             user: ownerId,
+            responsible: responsible || ownerId, // Default to owner if not provided
           },
         ],
         { session }
@@ -99,6 +101,21 @@ exports.createAppointment = async (req, res) => {
         relatedId: appoint[0]._id,
         onModel: 'Appointment'
       }], { session });
+
+      // Auto-create transaction if status is "Finalizado"
+      if (status === "Finalizado") {
+          await Transaction.create([{
+              description: `Serviço: ${petName} - ${ownerName}`,
+              amount: total,
+              type: "income",
+              category: "Serviço",
+              date: new Date(),
+              status: "pending", // Pending confirmation
+              paymentMethod: "cash", // Default
+              relatedAppointment: appoint[0]._id,
+              user: ownerId
+          }], { session });
+      }
 
       return await Appointment.findById(appoint[0]._id)
         .populate("baseService")
@@ -215,6 +232,8 @@ exports.updateAppointment = async (req, res) => {
       }
 
       const oldStatus = appointment.status; // Capture old status
+      
+      // Update fields including responsible
       Object.assign(appointment, req.body);
 
       if (req.body.baseService || req.body.extraServices) {

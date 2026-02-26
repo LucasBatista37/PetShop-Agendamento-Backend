@@ -48,6 +48,7 @@ const userSchema = new mongoose.Schema(
       enum: ["asc", "desc"],
       default: "asc",
     },
+    order: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

@@ -2,12 +2,19 @@ require("dotenv").config();
 const app = require("./app");
 const connectDB = require("./config/db");
 const { checkTrialEndingUsers } = require("./jobs/sendTrialEndingEmails");
+const clientRoutes = require("./routes/clientRoutes");
+const petRoutes = require("./routes/petRoutes");
+const financialRoutes = require("./routes/financialRoutes");
 
 const PORT = process.env.PORT || 5000;
 
 (async () => {
   try {
     await connectDB();
+
+    app.use("/api/clients", clientRoutes);
+    app.use("/api/pets", petRoutes);
+    app.use("/api/financial", financialRoutes);
 
     app.listen(PORT, () => {
       console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);

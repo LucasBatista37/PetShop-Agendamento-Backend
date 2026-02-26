@@ -6,10 +6,12 @@ const transporter = require("../utils/mailer");
 const { createUser } = require("../services/userService");
 const { generateInviteCollaboratorEmail } = require("../utils/emailTemplates");
 
+const getOwnerId = require("../utils/getOwnerId");
+
 exports.inviteCollaborator = async (req, res) => {
   try {
     const { email, department } = req.body;
-    const adminId = req.user._id;
+    const adminId = getOwnerId(req.user);
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -100,9 +102,9 @@ exports.acceptInvite = async (req, res) => {
 exports.getAllCollaborators = async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
-    const ownerId = req.user._id;
+    const ownerId = getOwnerId(req.user);
 
-    const query = { role: "collaborator", owner: ownerId };
+    const query = { owner: ownerId };
 
     const totalItems = await User.countDocuments(query);
 
@@ -113,7 +115,13 @@ exports.getAllCollaborators = async (req, res) => {
       .select("-password")
       .skip((currentPage - 1) * limit)
       .limit(parseInt(limit))
-      .sort({ createdAt: -1 });
+      .sort({ order: 1, createdAt: -1 })
+      .lean();
+
+    // Add distinction flag
+    collaborators.forEach(c => {
+      c.isPromotedAdmin = c.role === 'admin';
+    });
 
     res.json({
       collaborators,
@@ -129,14 +137,48 @@ exports.getAllCollaborators = async (req, res) => {
   }
 };
 
+exports.updateCollaborator = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { department, phone, role } = req.body;
+
+    const collaborator = await User.findOne({
+      _id: id,
+      owner: getOwnerId(req.user),
+    });
+
+    if (!collaborator) {
+      return res.status(404).json({ message: "Colaborador não encontrado." });
+    }
+
+    if (department !== undefined) collaborator.department = department;
+    if (phone !== undefined) collaborator.phone = phone;
+    if (role !== undefined && (role === "admin" || role === "collaborator")) {
+      collaborator.role = role;
+    }
+
+    await collaborator.save();
+
+    const updated = collaborator.toObject();
+    delete updated.password;
+
+    res.json({ 
+      message: "Colaborador atualizado com sucesso.",
+      collaborator: updated
+    });
+  } catch (err) {
+    console.error("Erro ao atualizar colaborador:", err);
+    res.status(500).json({ message: "Erro ao atualizar colaborador." });
+  }
+};
+
 exports.deleteCollaborator = async (req, res) => {
   try {
     const { id } = req.params;
 
     const collaborator = await User.findOneAndDelete({
       _id: id,
-      role: "collaborator",
-      owner: req.user._id,
+      owner: getOwnerId(req.user),
     });
 
     if (!collaborator) {
@@ -147,5 +189,27 @@ exports.deleteCollaborator = async (req, res) => {
   } catch (err) {
     console.error("Erro ao excluir colaborador:", err);
     res.status(500).json({ message: "Erro ao excluir colaborador." });
+  }
+};
+
+exports.reorderCollaborators = async (req, res) => {
+  try {
+    const { collaborators } = req.body;
+    const ownerId = getOwnerId(req.user);
+
+    // Use Promise.all to update all in parallel
+    await Promise.all(
+      collaborators.map(async (item) => {
+        await User.findOneAndUpdate(
+          { _id: item._id, owner: ownerId },
+          { order: item.order }
+        );
+      })
+    );
+
+    res.json({ message: "Ordem atualizada com sucesso." });
+  } catch (err) {
+    console.error("Erro ao reordenar colaboradores:", err);
+    res.status(500).json({ message: "Erro ao reordenar colaboradores." });
   }
 };

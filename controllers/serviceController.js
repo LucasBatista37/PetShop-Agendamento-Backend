@@ -27,7 +27,7 @@ exports.getAllServices = async (req, res) => {
   try {
     const ownerId = getOwnerId(req.user);
 
-    const services = await Service.find({ user: ownerId });
+    const services = await Service.find({ user: ownerId }).sort({ order: 1 });
 
     res.json(services);
   } catch (err) {
@@ -78,5 +78,30 @@ exports.deleteService = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Erro ao excluir serviço" });
+  }
+};
+
+exports.reorderServices = async (req, res) => {
+  try {
+    const ownerId = getOwnerId(req.user);
+    const { services } = req.body; 
+
+    if (!Array.isArray(services)) {
+      return res.status(400).json({ message: "Services must be an array" });
+    }
+
+    const updatePromises = services.map((item) =>
+      Service.updateOne(
+        { _id: item._id, user: ownerId },
+        { $set: { order: item.order } }
+      )
+    );
+
+    await Promise.all(updatePromises);
+
+    res.json({ message: "Ordem atualizada com sucesso" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Erro ao reordenar serviços" });
   }
 };

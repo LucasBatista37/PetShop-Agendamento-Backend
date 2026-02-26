@@ -40,19 +40,18 @@ const mapStripeStatusToEnum = (subscription) => {
   }
 };
 
-const generateAccessToken = (userId) => {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "15m" });
-};
+const generateAccessToken = (userId) =>
+  jwt.sign({ userId }, JWT_SECRET, { expiresIn: "15m" });
 
-const generateRefreshToken = (userId) => {
-  return jwt.sign({ userId }, REFRESH_SECRET, { expiresIn: "30d" });
-};
+const generateRefreshToken = (userId) =>
+  jwt.sign({ userId }, REFRESH_SECRET, { expiresIn: "30d" });
 
 const cookieOptions = {
   httpOnly: true,
   secure: NODE_ENV === "production",
   sameSite: NODE_ENV === "production" ? "None" : "Lax",
   expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  domain: NODE_ENV === "production" ? ".petcarezone.shop" : undefined,
 };
 
 exports.register = async (req, res) => {
@@ -183,7 +182,6 @@ exports.resendVerificationEmail = async (req, res) => {
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
     const user = await User.findOne({ email });
     if (!user || !user.password) {
       return res.status(400).json({ message: "Credenciais inválidas." });
@@ -215,6 +213,7 @@ exports.login = async (req, res) => {
       },
     });
   } catch (err) {
+    console.error("[Login] Erro:", err);
     return res.status(500).json({ message: "Erro no servidor" });
   }
 };
@@ -222,44 +221,33 @@ exports.login = async (req, res) => {
 exports.refreshToken = async (req, res) => {
   try {
     const token = req.cookies?.refreshToken;
-    console.log("[Refresh] Cookie recebido:", token);
-
-    if (!token) {
+    if (!token)
       return res.status(401).json({ message: "Refresh token não fornecido" });
-    }
 
     const decoded = jwt.verify(token, REFRESH_SECRET);
-    console.log("[Refresh] Token decodificado:", decoded);
-
     const user = await User.findById(decoded.userId);
 
     if (!user || user.refreshToken !== token) {
-      console.warn("[Refresh] Token inválido para user:", decoded.userId);
       return res.status(403).json({ message: "Refresh token inválido" });
     }
 
     const ROTATE_REFRESH = process.env.ROTATE_REFRESH !== "false";
-
     let newRefreshToken = token;
+
     if (ROTATE_REFRESH) {
       newRefreshToken = generateRefreshToken(user._id);
       user.refreshToken = newRefreshToken;
       await user.save();
       res.cookie("refreshToken", newRefreshToken, cookieOptions);
-      console.log("[Refresh] Refresh token ROTACIONADO");
-    } else {
-      console.log("[Refresh] Refresh token MANTIDO (modo teste)");
     }
 
     const newAccessToken = generateAccessToken(user._id);
-    console.log("[Refresh] Novo accessToken emitido");
 
     return res.json({
       accessToken: newAccessToken,
       ...(NODE_ENV !== "production" && { refreshToken: newRefreshToken }),
     });
   } catch (err) {
-    console.error("[Refresh] Erro:", err.message);
     return res
       .status(403)
       .json({ message: "Refresh token inválido ou expirado" });
@@ -331,7 +319,6 @@ exports.changePassword = async (req, res) => {
 
     res.json({ message: "Senha alterada com sucesso." });
   } catch (err) {
-    console.error("Erro em changePassword:", err);
     res.status(500).json({ message: "Erro ao alterar senha." });
   }
 };
@@ -394,24 +381,26 @@ exports.logout = async (req, res) => {
     const token = req.cookies?.refreshToken;
     if (token) {
       try {
-        const decoded = jwt.verify(token, process.env.REFRESH_SECRET);
+        const decoded = jwt.verify(token, REFRESH_SECRET);
         const user = await User.findById(decoded.userId);
         if (user) {
           user.refreshToken = null;
           await user.save();
         }
       } catch (err) {
-        console.warn("Token inválido ou expirado:", err.message);
+        console.warn("[Logout] Token inválido ou expirado:", err.message);
       }
     }
 
     res.clearCookie("refreshToken", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: NODE_ENV === "production",
       sameSite: "Strict",
+      domain: NODE_ENV === "production" ? ".petcarezone.shop" : undefined,
     });
     res.json({ message: "Logout realizado com sucesso." });
   } catch (err) {
+    console.error("[Logout] Erro:", err);
     res.status(500).json({ message: "Erro ao sair da conta" });
   }
 };

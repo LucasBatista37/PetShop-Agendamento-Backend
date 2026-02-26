@@ -8,6 +8,7 @@ const {
   getServiceById,
   updateService,
   deleteService,
+  reorderServices,
 } = require("../controllers/serviceController");
 
 const {
@@ -27,6 +28,7 @@ router.put(
   validateService,
   updateService
 );
+router.post("/reorder", reorderServices);
 router.delete("/:id", serviceMiddleware, deleteService);
 
 module.exports = router;

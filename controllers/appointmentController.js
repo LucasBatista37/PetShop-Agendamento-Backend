@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Appointment = require("../models/Appointment");
 const Service = require("../models/Service");
+const Transaction = require("../models/Transaction");
 const getOwnerId = require("../utils/getOwnerId");
 const { parseISO, isBefore } = require("date-fns");
 const User = require("../models/User");
@@ -51,6 +52,7 @@ exports.createAppointment = async (req, res) => {
         date,
         time,
         status = "Pendente",
+        responsible,
       } = req.body;
 
       const base = await Service.findById(baseService).session(session);
@@ -84,10 +86,36 @@ exports.createAppointment = async (req, res) => {
             status,
             price: total,
             user: ownerId,
+            responsible: responsible || ownerId, // Default to owner if not provided
           },
         ],
         { session }
       );
+
+      // Create notification
+      const Notification = require("../models/Notification");
+      await Notification.create([{
+        recipient: ownerId,
+        type: 'success',
+        message: `Novo agendamento criado para ${petName} em ${date} às ${time}`,
+        relatedId: appoint[0]._id,
+        onModel: 'Appointment'
+      }], { session });
+
+      // Auto-create transaction if status is "Finalizado"
+      if (status === "Finalizado") {
+          await Transaction.create([{
+              description: `Serviço: ${petName} - ${ownerName}`,
+              amount: total,
+              type: "income",
+              category: "Serviço",
+              date: new Date(),
+              status: "pending", // Pending confirmation
+              paymentMethod: "cash", // Default
+              relatedAppointment: appoint[0]._id,
+              user: ownerId
+          }], { session });
+      }
 
       return await Appointment.findById(appoint[0]._id)
         .populate("baseService")
@@ -203,6 +231,9 @@ exports.updateAppointment = async (req, res) => {
         throw { status: 403, message: "Acesso negado ao agendamento." };
       }
 
+      const oldStatus = appointment.status; // Capture old status
+      
+      // Update fields including responsible
       Object.assign(appointment, req.body);
 
       if (req.body.baseService || req.body.extraServices) {
@@ -221,6 +252,32 @@ exports.updateAppointment = async (req, res) => {
       }
 
       await appointment.save({ session });
+
+      // Create notification for update
+      const Notification = require("../models/Notification");
+      await Notification.create([{
+        recipient: ownerId,
+        type: 'info',
+        message: `Agendamento de ${appointment.petName} atualizado para ${appointment.status}`,
+        relatedId: appointment._id,
+        onModel: 'Appointment'
+      }], { session });
+
+      // Auto-create transaction if status changed to "Finalizado"
+      if (req.body.status === "Finalizado" && oldStatus !== "Finalizado") {
+          // Transaction model is already required at the top
+          await Transaction.create([{
+              description: `Serviço: ${appointment.petName} - ${appointment.ownerName}`,
+              amount: appointment.price || 0,
+              type: "income",
+              category: "Serviço",
+              date: new Date(),
+              status: "pending", // Pending confirmation
+              paymentMethod: "cash", // Default, user can change on confirmation
+              relatedAppointment: appointment._id,
+              user: ownerId
+          }], { session });
+      }
 
       return await Appointment.findById(appointment._id)
         .populate("baseService")

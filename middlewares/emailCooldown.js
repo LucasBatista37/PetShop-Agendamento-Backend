@@ -1,5 +1,5 @@
 const cooldowns = new Map();
-const EMAIL_COOLDOWN = 60; // segundos
+const EMAIL_COOLDOWN = 60; 
 
 module.exports = function emailCooldown(req, res, next) {
   const email = req.body.email;
@@ -13,7 +13,7 @@ module.exports = function emailCooldown(req, res, next) {
     const wait = Math.ceil((retryAt - now) / 1000);
     return res.status(429).json({
       message: `Aguarde ${wait}s antes de solicitar outro e-mail de verificação`,
-      retryAt, // timestamp em ms que o usuário poderá reenviar
+      retryAt, 
     });
   }
 

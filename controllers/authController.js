@@ -41,7 +41,7 @@ const mapStripeStatusToEnum = (subscription) => {
 };
 
 const generateAccessToken = (userId) => {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "10s" });
+  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "15m" });
 };
 
 const generateRefreshToken = (userId) => {
@@ -52,7 +52,7 @@ const cookieOptions = {
   httpOnly: true,
   secure: NODE_ENV === "production",
   sameSite: NODE_ENV === "production" ? "None" : "Lax",
-  maxAge: 30 * 24 * 60 * 60 * 1000,
+  expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
 };
 
 exports.register = async (req, res) => {
@@ -175,7 +175,6 @@ exports.resendVerificationEmail = async (req, res) => {
     await transporter.sendMail(mailOptions);
 
     res.json({ message: "E-mail de confirmação reenviado com sucesso." });
-
   } catch (err) {
     res.status(500).json({ message: "Erro ao reenviar e-mail de verificação" });
   }
@@ -223,30 +222,44 @@ exports.login = async (req, res) => {
 exports.refreshToken = async (req, res) => {
   try {
     const token = req.cookies?.refreshToken;
+    console.log("[Refresh] Cookie recebido:", token);
+
     if (!token) {
       return res.status(401).json({ message: "Refresh token não fornecido" });
     }
 
     const decoded = jwt.verify(token, REFRESH_SECRET);
+    console.log("[Refresh] Token decodificado:", decoded);
+
     const user = await User.findById(decoded.userId);
 
     if (!user || user.refreshToken !== token) {
+      console.warn("[Refresh] Token inválido para user:", decoded.userId);
       return res.status(403).json({ message: "Refresh token inválido" });
     }
 
-    const newRefreshToken = generateRefreshToken(user._id);
-    user.refreshToken = newRefreshToken;
-    await user.save();
+    const ROTATE_REFRESH = process.env.ROTATE_REFRESH !== "false";
 
-    res.cookie("refreshToken", newRefreshToken, cookieOptions);
+    let newRefreshToken = token;
+    if (ROTATE_REFRESH) {
+      newRefreshToken = generateRefreshToken(user._id);
+      user.refreshToken = newRefreshToken;
+      await user.save();
+      res.cookie("refreshToken", newRefreshToken, cookieOptions);
+      console.log("[Refresh] Refresh token ROTACIONADO");
+    } else {
+      console.log("[Refresh] Refresh token MANTIDO (modo teste)");
+    }
 
     const newAccessToken = generateAccessToken(user._id);
+    console.log("[Refresh] Novo accessToken emitido");
 
     return res.json({
       accessToken: newAccessToken,
       ...(NODE_ENV !== "production" && { refreshToken: newRefreshToken }),
     });
   } catch (err) {
+    console.error("[Refresh] Erro:", err.message);
     return res
       .status(403)
       .json({ message: "Refresh token inválido ou expirado" });

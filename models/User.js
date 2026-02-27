@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
+    petshopName: { type: String, trim: true },
     email: {
       type: String,
       required: true,
@@ -58,6 +59,11 @@ const userSchema = new mongoose.Schema(
     isUrlActive: {
       type: Boolean,
       default: false,
+    },
+    maxSimultaneousServices: {
+      type: Number,
+      default: 3,
+      min: 1,
     },
   },
   { timestamps: true }

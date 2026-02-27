@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const Appointment = require("../models/Appointment");
+const Service = require("../models/Service"); // necessário para populate funcionar
 
 exports.getPublicSchedule = async (req, res) => {
     try {
@@ -18,52 +19,67 @@ exports.getPublicSchedule = async (req, res) => {
         // Se não tiver data, apenas retornamos os detalhes básicos do pet shop
         if (!date) {
             return res.json({
-                name: petshopUser.name,
+                name: petshopUser.petshopName || petshopUser.name,
                 phone: petshopUser.phone,
                 // poderíamos retornar logo e outras infos se existisse
             });
         }
 
         // 2. Buscar agendamentos na data específica
-        const startDate = new Date(date);
-        startDate.setHours(0, 0, 0, 0);
-
-        const endDate = new Date(date);
-        endDate.setHours(23, 59, 59, 999);
+        // Use UTC to avoid timezone issues — dates stored as midnight UTC
+        const startDate = new Date(`${date}T00:00:00.000Z`);
+        const endDate = new Date(`${date}T23:59:59.999Z`);
 
         const dayAppts = await Appointment.find({
             user: ownerId,
             date: { $gte: startDate, $lte: endDate },
-            status: { $ne: "cancelado" }, // ignora cancelados (assumo que existam)
-        });
+            status: { $ne: "Cancelado" },
+        }).populate("baseService", "duration");
 
-        // 3. Calcular horários disponíveis
-        const MAX_PER_HOUR = 3; // Lógica atual de limite por horário
-        const availableSlots = [];
+        // 3. Calcular horários disponíveis e ocupados
+        const maxServices = petshopUser.maxSimultaneousServices || 3;
+
+        console.log(`[PublicSchedule] date=${date} | found=${dayAppts.length} appts | maxServices=${maxServices}`);
+
+        const slots = [];
 
         // Gerar slots das 08:00 às 18:00 (intervalo de 30 min)
         for (let h = 8; h <= 18; h++) {
             for (let m of [0, 30]) {
-                // Ignora 18:30
+                // Ignora 18:30 (último horário é 18:00)
                 if (h === 18 && m === 30) continue;
 
                 const hour = String(h).padStart(2, "0");
                 const minute = String(m).padStart(2, "0");
                 const timeString = `${hour}:${minute}`;
+                const slotMinutes = h * 60 + m;
 
-                const apptsAtTime = dayAppts.filter((a) => a.time === timeString);
+                // Contar agendamentos que OCUPAM este slot
+                const apptsAtSlot = dayAppts.filter((a) => {
+                    const [aH, aM] = a.time.split(":").map(Number);
+                    const apptStart = aH * 60 + aM;
+                    const duration = a.baseService?.duration || 30;
+                    const apptEnd = apptStart + duration;
+                    return slotMinutes >= apptStart && slotMinutes < apptEnd;
+                });
 
-                if (apptsAtTime.length < MAX_PER_HOUR) {
-                    availableSlots.push(timeString);
-                }
+                const bookedCount = apptsAtSlot.length;
+                const isAvailable = bookedCount < maxServices;
+
+                slots.push({
+                    time: timeString,
+                    available: isAvailable,
+                    bookedCount,
+                    maxServices
+                });
             }
         }
 
         res.json({
-            name: petshopUser.name,
+            name: petshopUser.petshopName || petshopUser.name,
             phone: petshopUser.phone,
             date,
-            availableSlots
+            slots
         });
     } catch (err) {
         console.error(err);

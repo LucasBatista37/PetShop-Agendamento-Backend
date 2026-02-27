@@ -61,7 +61,7 @@ exports.register = async (req, res) => {
   }
 
   try {
-    const { name, email, phone, password } = req.body;
+    const { name, petshopName, email, phone, password } = req.body;
 
     if (await User.findOne({ email })) {
       return res.status(409).json({ message: "E-mail já cadastrado" });
@@ -69,6 +69,7 @@ exports.register = async (req, res) => {
 
     const { user, emailToken } = await createUser({
       name,
+      petshopName,
       email,
       phone,
       password,
@@ -208,6 +209,7 @@ exports.login = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
+        petshopName: user.petshopName,
         email: user.email,
         phone: user.phone,
       },

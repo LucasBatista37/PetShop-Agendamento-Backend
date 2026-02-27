@@ -60,6 +60,8 @@ app.use("/api/notifications", require("./routes/notificationRoutes"));
 app.use("/api/clients", clientRoutes);
 app.use("/api/pets", petRoutes);
 app.use("/api/financial", financialRoutes);
+app.use("/api/settings", require("./routes/settings.routes"));
+app.use("/api/public", require("./routes/public.routes"));
 
 app.get("/", (req, res) => {
   res.send("🚀 API do PetShop SaaS está no ar!");

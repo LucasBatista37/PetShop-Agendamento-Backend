@@ -49,6 +49,16 @@ const userSchema = new mongoose.Schema(
       default: "asc",
     },
     order: { type: Number, default: 0 },
+    customUrl: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true,
+    },
+    isUrlActive: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

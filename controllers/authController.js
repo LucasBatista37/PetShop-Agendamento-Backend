@@ -119,11 +119,12 @@ exports.register = async (req, res) => {
         "Cadastro realizado com sucesso. Você ganhou 30 dias grátis! Verifique seu e-mail para ativar sua conta.",
     });
   } catch (err) {
+    console.error("[Register Error]", err);
     if (err.type === "StripeCardError" || err.type?.includes("Stripe")) {
       return res.status(400).json({ message: "Erro ao processar no Stripe." });
     }
 
-    res.status(500).json({ message: "Erro no servidor." });
+    res.status(500).json({ message: "Erro no servidor.", error: err.message, stack: err.stack });
   }
 };
 

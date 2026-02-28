@@ -10,7 +10,7 @@ const getOwnerId = require("../utils/getOwnerId");
 
 exports.inviteCollaborator = async (req, res) => {
   try {
-    const { email, department } = req.body;
+    const { email, department, role, permissions } = req.body;
     const adminId = getOwnerId(req.user);
 
     const existingUser = await User.findOne({ email });
@@ -30,6 +30,8 @@ exports.inviteCollaborator = async (req, res) => {
       department,
       token,
       expiresAt,
+      role: role && role === "admin" ? "admin" : "collaborator",
+      permissions: permissions || {},
       owner: adminId,
     });
 
@@ -74,7 +76,8 @@ exports.acceptInvite = async (req, res) => {
       email,
       password,
       department: invite.department,
-      role: "collaborator",
+      role: invite.role || "collaborator",
+      permissions: invite.permissions || {},
       owner: invite.owner,
       isVerified: true,
       pendingInvitation: false,
@@ -140,7 +143,7 @@ exports.getAllCollaborators = async (req, res) => {
 exports.updateCollaborator = async (req, res) => {
   try {
     const { id } = req.params;
-    const { department, phone, role } = req.body;
+    const { department, phone, role, permissions } = req.body;
 
     const collaborator = await User.findOne({
       _id: id,
@@ -156,13 +159,20 @@ exports.updateCollaborator = async (req, res) => {
     if (role !== undefined && (role === "admin" || role === "collaborator")) {
       collaborator.role = role;
     }
+    if (permissions !== undefined) {
+      // Merge permissions instead of just overriding entirely, to support partial updates
+      collaborator.permissions = {
+        ...collaborator.permissions,
+        ...permissions,
+      };
+    }
 
     await collaborator.save();
 
     const updated = collaborator.toObject();
     delete updated.password;
 
-    res.json({ 
+    res.json({
       message: "Colaborador atualizado com sucesso.",
       collaborator: updated
     });

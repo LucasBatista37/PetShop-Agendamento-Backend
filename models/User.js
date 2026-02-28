@@ -1,5 +1,13 @@
 const mongoose = require("mongoose");
 
+const defaultPermissions = {
+  read: { type: Boolean, default: true },
+  write: { type: Boolean, default: true },
+  delete: { type: Boolean, default: true },
+};
+
+const permissionSchema = new mongoose.Schema(defaultPermissions, { _id: false });
+
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, trim: true },
@@ -64,6 +72,15 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 3,
       min: 1,
+    },
+    permissions: {
+      appointments: { type: permissionSchema, default: () => ({}) },
+      clients: { type: permissionSchema, default: () => ({}) },
+      pets: { type: permissionSchema, default: () => ({}) },
+      services: { type: permissionSchema, default: () => ({}) },
+      financial: { type: permissionSchema, default: () => ({}) },
+      collaborators: { type: permissionSchema, default: () => ({}) },
+      settings: { type: permissionSchema, default: () => ({}) },
     },
   },
   { timestamps: true }

@@ -212,6 +212,8 @@ exports.login = async (req, res) => {
         petshopName: user.petshopName,
         email: user.email,
         phone: user.phone,
+        role: user.role,
+        permissions: user.permissions,
       },
     });
   } catch (err) {
